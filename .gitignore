@@ -1,0 +1,8 @@
+**/*~
+**/*.swp
+**/*.swo
+**/*.o
+.cache
+kernel-riscv64-virt
+compile_commands.json
+root.fs
