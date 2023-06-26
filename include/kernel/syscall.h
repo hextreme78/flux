@@ -1,6 +1,9 @@
 #ifndef KERNEL_SYSCALL_H
 #define KERNEL_SYSCALL_H
 
+/* debug syscall */
+#define SYS_DEBUG_PRINTINT 100
+
 /* process syscalls */
 #define SYS__EXIT  0
 #define SYS_WAIT   1

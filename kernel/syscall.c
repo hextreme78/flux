@@ -4,14 +4,9 @@
 #include <kernel/kprintf.h>
 #include <kernel/sysproc.h>
 
-void debug_print0(void)
+void debug_printint(i64 a0)
 {
-	kprintf_s("debug_print0\n");
-}
-
-void debug_print1(void)
-{
-	kprintf_s("debug_print1\n");
+	kprintf_s("debug_printint %d\n", a0);
 }
 
 void syscall(void)
@@ -26,11 +21,8 @@ void syscall(void)
 	callnum = tf->a7;
 
 	switch (callnum) {
-	case 100:
-		debug_print0();
-		break;
-	case 101:
-		debug_print1();
+	case SYS_DEBUG_PRINTINT:
+		debug_printint(tf->a0);
 		break;
 
 	case SYS__EXIT:

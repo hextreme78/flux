@@ -3,6 +3,9 @@
 
 #include <stdint.h>
 
+/* debug syscall */
+#define SYS_DEBUG_PRINTINT 100
+
 /* process syscalls */
 #define SYS__EXIT  0
 #define SYS_WAIT   1
@@ -15,6 +18,11 @@
 long syscall(long number, ...);
 
 void _exit(int status);
+
+typedef int64_t pid_t;
+pid_t getpid(void);
+
+void debug_printint(int64_t num);
 
 #endif
 

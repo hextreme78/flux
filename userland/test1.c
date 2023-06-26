@@ -3,12 +3,12 @@
 
 int main(void)
 {
-	syscall(100);
+	debug_printint(getpid());
 
 	for (size_t i = 0; i < 10000000; i++)
 		asm volatile("nop;");
 
-	syscall(100);
+	debug_printint(getpid());
 
 	return 0;
 }

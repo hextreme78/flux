@@ -6,3 +6,13 @@ void _exit(int status)
 	for (;;);
 }
 
+pid_t getpid(void)
+{
+	return syscall(SYS_GETPID);
+}
+
+void debug_printint(int64_t num)
+{
+	syscall(SYS_DEBUG_PRINTINT, num);
+}
+
