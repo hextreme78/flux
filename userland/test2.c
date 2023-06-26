@@ -1,19 +1,15 @@
 #include <stddef.h>
+#include "syscall.h"
 
-void _start(void)
+int main(void)
 {
-	main();
-}
-
-void main(void)
-{
-	asm volatile("li a7, 101; ecall;" : : : "a7");
+	syscall(101);
 
 	for (size_t i = 0; i < 10000000; i++)
 		asm volatile("nop;");
 
-	asm volatile("li a7, 101; ecall;" : : : "a7");
+	syscall(101);
 
-	while (1);
+	return 0;
 }
 

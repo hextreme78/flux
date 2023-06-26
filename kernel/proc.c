@@ -49,11 +49,9 @@ void scheduler(void)
 			spinlock_acquire(&proctable[i].lock);
 			if (proctable[i].state == PROC_STATE_RUNNABLE) {
 				curcpu()->proc = &proctable[i];
-				curproc()->state = PROC_STATE_RUNNING;
 
 				switch_to_user(curcpu()->context);
 
-				curproc()->state = PROC_STATE_RUNNABLE;
 				curcpu()->proc = NULL;
 			}
 			spinlock_release(&proctable[i].lock);
@@ -68,31 +66,28 @@ void switch_userret_prepare(void)
 		(VA_TRAMPOLINE + (u64) switch_userret -
 		(u64) &trampoline);
 
-	if (curproc()->in_irq) {
-		/* release process lock acquired in scheduler */
-		spinlock_release(&curproc()->lock);
-		
-		/* disable irq while switching to irq handler */
-		w_sstatus(r_sstatus() & ~SSTATUS_SIE);
+	/* set proc state */
+	curproc()->state = PROC_STATE_RUNNING;
 
+	/* release process lock acquired in scheduler */
+	spinlock_release(&curproc()->lock);
+
+	/* disable irq while switching */
+	w_sstatus(r_sstatus() & ~SSTATUS_SIE);
+	
+	/* user epc address for sret */
+	w_sepc(curproc()->context->epc);
+
+	if (curproc()->in_irq) {
 		/* Set spp to s-mode for sret and reset
 		 * spie to disable interrupts after sret
 		 */
 		w_sstatus((r_sstatus() & ~SSTATUS_SPIE) | SSTATUS_SPP_S);
 
-		/* user epc address for sret */
-		w_sepc(curproc()->context->epc);
-
 		/* return to irq handler */
 		switch_irqret(curproc()->context);
 	}
 
-	/* release process lock acquired in scheduler */
-	spinlock_release(&curproc()->lock);
-	
-	/* disable irq while switching to u-mode */
-	w_sstatus(r_sstatus() & ~SSTATUS_SIE);
-	
 	/* set usertrap
 	 * usertrap is mapped to the highest page in addrspace
 	 */
@@ -102,9 +97,6 @@ void switch_userret_prepare(void)
 	 * spie to enable interrupts after sret
 	 */
 	w_sstatus((r_sstatus() & ~SSTATUS_SPP_S) | SSTATUS_SPIE);
-
-	/* user epc address for sret */
-	w_sepc(curproc()->context->epc);
 
 	/* save cpuid in trapframe */
 	curproc()->trapframe->kernel_tp = cpuid();

@@ -24,6 +24,9 @@ void wchan_sleep(void)
 	/* we must return after switch_to_user call in scheduler */
 	w_sepc((u64) curcpu()->context->ra);
 
+	/* set proc state */
+	curproc()->state = PROC_STATE_RUNNABLE;
+	
 	/* return to scheduler */
 	switch_to_scheduler_and_save(curcpu()->context, curproc()->context);
 

@@ -3,10 +3,8 @@ PLATFORM = virt
 TOOLCHAIN_PREFIX = riscv64-unknown-linux-gnu
 TARGET = kernel-$(ARCH)-$(PLATFORM)
 
-QEMU_SMP = 8
+QEMU_SMP = 1
 QEMU_MEM = 256M
-
-CONFIG = config
 
 CC = $(TOOLCHAIN_PREFIX)-gcc
 LD = $(TOOLCHAIN_PREFIX)-ld
@@ -40,7 +38,7 @@ CFLAGS = \
 	-g \
 	-nostartfiles \
 	-mcmodel=medany \
-	$(shell sed -e 's/^/-D/' $(CONFIG))
+	$(shell sed -e 's/^/-D/' config)
 
 LDFLAGS = \
 	-Tkernel/kernel.ld \
