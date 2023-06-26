@@ -7,12 +7,12 @@ void _start(void)
 
 void main(void)
 {
-	asm volatile("li a7, 1; ecall;" : : : "a7");
+	asm volatile("li a7, 101; ecall;" : : : "a7");
 
 	for (size_t i = 0; i < 10000000; i++)
 		asm volatile("nop;");
 
-	asm volatile("li a7, 1; ecall;" : : : "a7");
+	asm volatile("li a7, 101; ecall;" : : : "a7");
 
 	while (1);
 }

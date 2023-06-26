@@ -9,5 +9,8 @@ void *memset(void *s, int c, size_t n);
 void bzero(void *s, size_t n);
 int memcmp(const void *s1, const void *s2, size_t n);
 
+int copy_to_user(void *to, const void *from, size_t n);
+int copy_from_user(void *to, const void *from, size_t n);
+
 #endif
 

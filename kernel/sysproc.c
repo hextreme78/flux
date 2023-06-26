@@ -1,52 +1,66 @@
 #include <kernel/sysproc.h>
-#include <kernel/proc.h>
-#include <kernel/riscv64.h>
+#include <kernel/wchan.h>
+#include <kernel/klib.h>
+#include <kernel/errno.h>
 
-void sys_exit(int status)
+void switch_to_scheduler(ctx_t *ctx);
+
+void sys__exit(int status)
 {
 	curproc()->exit_status = status;
 
 	spinlock_acquire(&curproc()->lock);
 	curproc()->state = PROC_STATE_ZOMBIE;
 	spinlock_release(&curproc()->lock);
+
+	switch_to_scheduler(curcpu()->context);
 }
 
-pid_t sys_waitpid(pid_t pid, int *status, int options)
+u64 sys_wait(int *status)
 {
-	if (pid > 0) {
-		proc_t *child = NULL;
-		
-		list_for_each_entry (child, curproc(), children) {
-			if (child->pid == pid) {
-				break;
-			}
-		}
-		
-		if (!child) {
-			return -1;
-		}
+	u64 ret;
+	proc_t *child = NULL;
 
-		spinlock_acquire(&child->lock);
-		while (child->state != PROC_STATE_ZOMBIE) {
-			spinlock_release(&child->lock);
-
-			/* replace with switch to scheduler */
-			nop();
-
-			spinlock_acquire(&child->lock);
-		}
-		spinlock_release(&child->lock);
-		
-		proc_destroy(child);
-
-		return pid;
-	
-	} else if (pid == 0) {
-		return -1;
-	} else {
-		return -1;
+	/* if process does not have children return error */
+	if (list_empty(&curproc()->children)) {
+		return -ECHILD;
 	}
 
-	return 0;
+	child = list_next_entry(curproc(), children);
+
+	spinlock_acquire(&child->lock);	
+
+	/* wait for zombie child */
+	while (child->state != PROC_STATE_ZOMBIE) {
+		spinlock_release(&child->lock);
+
+		wchan_sleep();
+
+		spinlock_acquire(&child->lock);	
+	}
+
+	/* copy exit status to user memory */
+	if (copy_to_user(status, &child->exit_status, sizeof(int)) < 0) {
+		spinlock_release(&child->lock);
+		return -EINVAL;
+	}
+
+	/* save child pid before proc_destroy */
+	ret = child->pid;
+
+	proc_destroy(child);
+
+	spinlock_release(&child->lock);
+
+	return ret;
+}
+
+u64 sys_getpid(void)
+{
+	pid_t pid;
+	spinlock_acquire(&curproc()->lock);
+	pid = curproc()->pid;
+	spinlock_release(&curproc()->lock);
+	return pid;
 }
 
