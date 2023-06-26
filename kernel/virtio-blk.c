@@ -67,10 +67,10 @@ void virtio_blk_dev_init(virtio_blk_mmio_t *base)
 	virtio_blk_write(dev, 0, blk);
 }
 
-int virtio_blk_read(virtio_blk_t *dev, uint64_t sector, void *data)
+int virtio_blk_read(virtio_blk_t *dev, u64 sector, void *data)
 {
 	virtio_blk_req_t *req;
-	uint16_t desc0, desc1, desc2;
+	u16 desc0, desc1, desc2;
 
 	if (sector >= dev->capacity) {
 		return -EIO;
@@ -86,19 +86,19 @@ int virtio_blk_read(virtio_blk_t *dev, uint64_t sector, void *data)
 
 	/* header descriptor */
 	desc0 = virtq_desc_alloc(&dev->requestq);
-	dev->requestq.desc[desc0].addr = (uint64_t) req;
+	dev->requestq.desc[desc0].addr = (u64) req;
 	dev->requestq.desc[desc0].len = VIRTIO_BLK_REQ_HEAD_SIZE;
 	dev->requestq.desc[desc0].flags = VIRTQ_DESC_F_NEXT;
 
 	/* data descriptor */
 	desc1 = virtq_desc_alloc(&dev->requestq);
-	dev->requestq.desc[desc1].addr = (uint64_t) data;
+	dev->requestq.desc[desc1].addr = (u64) data;
 	dev->requestq.desc[desc1].len = VIRTIO_BLK_REQ_DATA_SIZE;
 	dev->requestq.desc[desc1].flags = VIRTQ_DESC_F_NEXT | VIRTQ_DESC_F_WRITE;
 
 	/* tail descriptor */
 	desc2 = virtq_desc_alloc(&dev->requestq);
-	dev->requestq.desc[desc2].addr = (uint64_t) &req->status;
+	dev->requestq.desc[desc2].addr = (u64) &req->status;
 	dev->requestq.desc[desc2].len = VIRTIO_BLK_REQ_TAIL_SIZE;
 	dev->requestq.desc[desc2].flags = VIRTQ_DESC_F_WRITE;
 
@@ -118,10 +118,10 @@ int virtio_blk_read(virtio_blk_t *dev, uint64_t sector, void *data)
 	return 0;
 }
 
-int virtio_blk_write(virtio_blk_t *dev, uint64_t sector, void *data)
+int virtio_blk_write(virtio_blk_t *dev, u64 sector, void *data)
 {
 	virtio_blk_req_t *req;
-	uint16_t desc0, desc1, desc2;
+	u16 desc0, desc1, desc2;
 
 	if (sector >= dev->capacity) {
 		return -EIO;
@@ -138,19 +138,19 @@ int virtio_blk_write(virtio_blk_t *dev, uint64_t sector, void *data)
 
 	/* header descriptor */
 	desc0 = virtq_desc_alloc(&dev->requestq);
-	dev->requestq.desc[desc0].addr = (uint64_t) req;
+	dev->requestq.desc[desc0].addr = (u64) req;
 	dev->requestq.desc[desc0].len = VIRTIO_BLK_REQ_HEAD_SIZE;
 	dev->requestq.desc[desc0].flags = VIRTQ_DESC_F_NEXT;
 
 	/* data descriptor */
 	desc1 = virtq_desc_alloc(&dev->requestq);
-	dev->requestq.desc[desc1].addr = (uint64_t) data;
+	dev->requestq.desc[desc1].addr = (u64) data;
 	dev->requestq.desc[desc1].len = VIRTIO_BLK_REQ_DATA_SIZE;
 	dev->requestq.desc[desc1].flags = VIRTQ_DESC_F_NEXT;
 
 	/* tail descriptor */
 	desc2 = virtq_desc_alloc(&dev->requestq);
-	dev->requestq.desc[desc2].addr = (uint64_t) &req->status;
+	dev->requestq.desc[desc2].addr = (u64) &req->status;
 	dev->requestq.desc[desc2].len = VIRTIO_BLK_REQ_TAIL_SIZE;
 	dev->requestq.desc[desc2].flags = VIRTQ_DESC_F_WRITE;
 

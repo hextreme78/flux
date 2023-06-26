@@ -4,7 +4,6 @@
 #include <kernel/alloc.h>
 #include <kernel/klib.h>
 #include <kernel/errno.h>
-#include <stddef.h>
 
 void virtio_init(void)
 {
@@ -36,7 +35,7 @@ void virtio_init(void)
 	}
 }
 
-int virtq_init(virtio_mmio_t *base, virtq_t *virtq, uint32_t queue_sel)
+int virtq_init(virtio_mmio_t *base, virtq_t *virtq, u32 queue_sel)
 {
 	/* select queue */
 	base->queue_sel = queue_sel;
@@ -97,12 +96,12 @@ int virtq_init(virtio_mmio_t *base, virtq_t *virtq, uint32_t queue_sel)
 	/* write physical addresses of the queue’s
 	 * descriptor area, driver area and device area
 	 */
-	base->queue_desc_low = (uint64_t) virtq->desc;
-	base->queue_desc_high = (uint64_t) virtq->desc >> 32;
-	base->queue_driver_low = (uint64_t) virtq->avail;
-	base->queue_driver_high = (uint64_t) virtq->avail >> 32;
-	base->queue_device_low = (uint64_t) virtq->used;
-	base->queue_device_high = (uint64_t) virtq->used >> 32;
+	base->queue_desc_low = (u64) virtq->desc;
+	base->queue_desc_high = (u64) virtq->desc >> 32;
+	base->queue_driver_low = (u64) virtq->avail;
+	base->queue_driver_high = (u64) virtq->avail >> 32;
+	base->queue_device_low = (u64) virtq->used;
+	base->queue_device_high = (u64) virtq->used >> 32;
 
 	/* write 0x1 to queueready */
 	base->queue_ready = 0x1;
@@ -117,7 +116,7 @@ void virtq_destroy(virtq_t *virtq)
 	kfree(virtq->used_unaligned);
 }
 
-uint16_t virtq_desc_alloc(virtq_t *virtq)
+u16 virtq_desc_alloc(virtq_t *virtq)
 {
 	for (size_t desc = 0; desc < virtq->virtqsz; desc++) {
 		if (!virtq->descmap[desc]) {
@@ -128,7 +127,7 @@ uint16_t virtq_desc_alloc(virtq_t *virtq)
 	return VIRTQ_ERROR;
 }
 
-void virtq_desc_free(virtq_t *virtq, uint16_t desc)
+void virtq_desc_free(virtq_t *virtq, u16 desc)
 {
 	virtq->descmap[desc] = 0;
 }

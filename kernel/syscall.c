@@ -2,8 +2,6 @@
 #include <kernel/riscv64.h>
 #include <kernel/proc.h>
 #include <kernel/kprintf.h>
-#include <stdint.h>
-
 #include <kernel/sysproc.h>
 
 void debug_print0(void)
@@ -16,11 +14,10 @@ void debug_print1(void)
 	kprintf_s("debug_print1\n");
 }
 
-
 void syscall(void)
 {
 	trapframe_t *tf = curproc()->trapframe;
-	uint64_t callnum = tf->a7;
+	u64 callnum = tf->a7;
 
 	switch (callnum) {
 	case 0:

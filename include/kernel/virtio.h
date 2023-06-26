@@ -2,7 +2,7 @@
 #define KERNEL_VIRTIO_H
 
 #include <kernel/platform-virt.h>
-#include <stdint.h>
+#include <kernel/types.h>
 
 #define VIRTIO_MMIO_MAX 8
 #define VIRTIO_MMIO_BASE(n) ((virtio_mmio_t *) (VIRT_VIRTIO + (n) * 0x1000))
@@ -43,39 +43,39 @@
 #define VIRTIO_QUEUE_DEVICE_AREA_ALIGN 4
 
 typedef volatile struct {
-	uint32_t magic_value;
-	uint32_t version;
-	uint32_t device_id;
-	uint32_t vendor_id;
-	uint32_t device_features;
-	uint32_t device_features_sel;
-	uint32_t unused0[2];
-	uint32_t driver_features;
-	uint32_t driver_features_sel;
-	uint32_t unused1[2];
-	uint32_t queue_sel;
-	uint32_t queue_num_max;
-	uint32_t queue_num;
-	uint32_t unused2[2];
-	uint32_t queue_ready;
-	uint32_t unused3[2];
-	uint32_t queue_notify;
-	uint32_t unused4[3];
-	uint32_t interrupt_status;
-	uint32_t interrupt_ack;
-	uint32_t unused5[2];
-	uint32_t status;
-	uint32_t unused6[3];
-	uint32_t queue_desc_low;
-	uint32_t queue_desc_high;
-	uint32_t unused7[2];
-	uint32_t queue_driver_low;
-	uint32_t queue_driver_high;
-	uint32_t unused8[2];
-	uint32_t queue_device_low;
-	uint32_t queue_device_high;
-	uint32_t unused9[21];
-	uint32_t config_generation;
+	u32 magic_value;
+	u32 version;
+	u32 device_id;
+	u32 vendor_id;
+	u32 device_features;
+	u32 device_features_sel;
+	u32 unused0[2];
+	u32 driver_features;
+	u32 driver_features_sel;
+	u32 unused1[2];
+	u32 queue_sel;
+	u32 queue_num_max;
+	u32 queue_num;
+	u32 unused2[2];
+	u32 queue_ready;
+	u32 unused3[2];
+	u32 queue_notify;
+	u32 unused4[3];
+	u32 interrupt_status;
+	u32 interrupt_ack;
+	u32 unused5[2];
+	u32 status;
+	u32 unused6[3];
+	u32 queue_desc_low;
+	u32 queue_desc_high;
+	u32 unused7[2];
+	u32 queue_driver_low;
+	u32 queue_driver_high;
+	u32 unused8[2];
+	u32 queue_device_low;
+	u32 queue_device_high;
+	u32 unused9[21];
+	u32 config_generation;
 } /* __attribute__((packed)) */ virtio_mmio_t;
 
 /* This marks a buffer as continuing via the next field. */
@@ -87,53 +87,53 @@ typedef volatile struct {
 
 typedef struct {
 	/* Address (guest-physical). */
-	uint64_t addr;
+	u64 addr;
 	/* Length. */
-	uint32_t len;
+	u32 len;
 	/* The flags as indicated above. */
-	uint16_t flags;
+	u16 flags;
 	/* Next field if flags & NEXT */
-	uint16_t next;
+	u16 next;
 } /* __attribute__((packed)) */  virtq_desc_t;
 
 #define VIRTQ_AVAIL_F_NO_INTERRUPT 1
 
 typedef struct {
-	uint16_t flags;
-	uint16_t idx;
+	u16 flags;
+	u16 idx;
 
-	uint16_t ring[0];
+	u16 ring[0];
 
-	uint16_t used_event; /* Only if VIRTIO_F_EVENT_IDX */
+	u16 used_event; /* Only if VIRTIO_F_EVENT_IDX */
 } /*__attribute__((packed))*/ virtq_avail_t;
 
 typedef struct {
 	/* Index of start of used descriptor chain. */
-	uint32_t id;
+	u32 id;
 	/*
 	* The number of bytes written into the device writable portion of
 	* the buffer described by the descriptor chain.
 	*/
-	uint32_t len;
+	u32 len;
 } /*__attribute__((packed))*/ virtq_used_elem_t;
 
 #define VIRTQ_USED_F_NO_NOTIFY 1
 
 typedef struct {
-	uint16_t flags;
-	uint16_t idx;
+	u16 flags;
+	u16 idx;
 
 	virtq_used_elem_t ring[0];
 
-	uint16_t avail_event; /* Only if VIRTIO_F_EVENT_IDX */
+	u16 avail_event; /* Only if VIRTIO_F_EVENT_IDX */
 } /*__attribute__((packed))*/ virtq_used_t;
 
 #define VIRTQ_ERROR -1
 
 typedef struct {
-	uint32_t virtqsz;
+	u32 virtqsz;
 
-	uint8_t *descmap;
+	u8 *descmap;
 
 	virtq_desc_t *desc;
 	virtq_avail_t *avail;
@@ -145,10 +145,10 @@ typedef struct {
 } virtq_t;
 
 void virtio_init(void);
-int virtq_init(virtio_mmio_t *base, virtq_t *virtq, uint32_t queue_sel);
+int virtq_init(virtio_mmio_t *base, virtq_t *virtq, u32 queue_sel);
 void virtq_destroy(virtq_t *virtq);
-uint16_t virtq_desc_alloc(virtq_t *virtq);
-void virtq_desc_free(virtq_t *virtq, uint16_t desc);
+u16 virtq_desc_alloc(virtq_t *virtq);
+void virtq_desc_free(virtq_t *virtq, u16 desc);
 
 #endif
 

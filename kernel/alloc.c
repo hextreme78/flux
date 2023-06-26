@@ -6,14 +6,14 @@
 
 static spinlock_t kpagemap_lock;
 static kpagemap_t *kpagemap;
-static uint64_t maxpages;
+static u64 maxpages;
 
 static spinlock_t kmalloc_lock;
 static alloc_t kmalloc_list;
 
 void alloc_init(void)
 {
-	uint64_t ramsz;
+	u64 ramsz;
 
 	spinlock_init(&kpagemap_lock);
 	spinlock_init(&kmalloc_lock);
@@ -78,10 +78,10 @@ nextiter:
 
 void kpage_free(void *mem)
 {
-	if ((uint64_t) mem < ram_start()) {
+	if ((u64) mem < ram_start()) {
 		return;
 	}
-	size_t kpagei = (((uint64_t) mem) - ram_start()) / PAGESZ;
+	size_t kpagei = (((u64) mem) - ram_start()) / PAGESZ;
 	spinlock_acquire(&kpagemap_lock);
 	while (1) {
 		kpagemap[kpagei].alloc = false;
@@ -132,7 +132,7 @@ static void *__kmalloc_suballoc_existing_or_new(alloc_t *alloc, size_t memsz)
 			left->size = memsz;
 			left->alloc = true;
 
-			right = (suballoc_t *) ((uint8_t *) (left + 1) + suballocsz);
+			right = (suballoc_t *) ((u8 *) (left + 1) + suballocsz);
 			right->size = suballocsz - memsz - sizeof(suballoc_t);
 			right->alloc = false;
 			right->parent_alloc = alloc;
@@ -145,8 +145,8 @@ static void *__kmalloc_suballoc_existing_or_new(alloc_t *alloc, size_t memsz)
 
 	/* if there is no mem between suballocs try to add to the end of list */
 	suballoc_t *last = list_prev_entry(&alloc->suballoc_head, suballoc_list);
-	suballoc_t *new = (suballoc_t *) ((uint64_t) (last + 1) + last->size);
-	if ((uint64_t) new + memsz <= alloc->npages * PAGESZ + (uint64_t) alloc) {
+	suballoc_t *new = (suballoc_t *) ((u64) (last + 1) + last->size);
+	if ((u64) new + memsz <= alloc->npages * PAGESZ + (u64) alloc) {
 		new->alloc = true;
 		new->size = memsz;
 		new->parent_alloc = alloc;
@@ -159,7 +159,7 @@ static void *__kmalloc_suballoc_existing_or_new(alloc_t *alloc, size_t memsz)
 
 static void *__kmalloc_alloc_and_suballoc_new(alloc_t *head, size_t memsz)
 {
-	uint64_t npages = PAGEROUND(memsz + sizeof(alloc_t) +
+	u64 npages = PAGEROUND(memsz + sizeof(alloc_t) +
 			sizeof(suballoc_t)) / PAGESZ;
 	alloc_t *new_alloc = kpage_alloc(npages);
 	if (!new_alloc) {

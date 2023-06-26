@@ -1,11 +1,10 @@
 #ifndef KERNEL_LIST_H
 #define KERNEL_LIST_H
 
-#include <stdint.h>
-#include <stdbool.h>
+#include <kernel/types.h>
 
 #define list_entry(ptr, type, field) \
-	((type *) ((uint64_t) (ptr) - (uint64_t) &((type *) 0)->field))
+	((type *) ((u64) (ptr) - (u64) &((type *) 0)->field))
 
 #define list_next_entry(ptr, field) \
 	(list_entry((ptr)->field.next, typeof(*(ptr)), field))

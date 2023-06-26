@@ -1,9 +1,9 @@
 #ifndef KERNEL_KPRINTF_H
 #define KERNEL_KPRINTF_H
 
-#include <stdint.h>
+#include <kernel/types.h>
 
-extern uint64_t paniced;
+extern u64 paniced;
 
 void kprintf_init(void);
 

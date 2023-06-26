@@ -8,18 +8,18 @@
 #include <kernel/proc.h>
 #include <kernel/virtio.h>
 
-static uint64_t cpu0_init = 0;
+static u64 cpu0_init = 0;
 
-extern uint64_t elfbin_test1;
-extern uint64_t elfbin_test2;
-extern uint64_t elfbin_end;
+extern u64 elfbin_test1;
+extern u64 elfbin_test2;
+extern u64 elfbin_end;
 
 void __proc_test__(void)
 {
 	void *elf1 = &elfbin_test1;
-	size_t elf1sz = (uint64_t) &elfbin_test2 - (uint64_t) elfbin_test1;
+	size_t elf1sz = (u64) &elfbin_test2 - (u64) elfbin_test1;
 	void *elf2 = &elfbin_test2;
-	size_t elf2sz = (uint64_t) &elfbin_end - (uint64_t) elfbin_test2;
+	size_t elf2sz = (u64) &elfbin_end - (u64) elfbin_test2;
 
 	proc_create(elf1, elf1sz);
 	proc_create(elf2, elf2sz);

@@ -1,27 +1,27 @@
 #ifndef KERNEL_ATOMIC_H
 #define KERNEL_ATOMIC_H
 
-#include <stdint.h>
+#include <kernel/types.h>
 
-static inline uint64_t atomic_test_and_set(volatile uint64_t *var, uint64_t new)
+static inline u64 atomic_test_and_set(volatile u64 *var, u64 new)
 {
-	uint64_t old;
+	u64 old;
 	asm volatile("amoswap.d %0, %1, (%2)"
 			: "=r" (old)
 			: "r" (new), "r" (var));
 	return old;
 }
 
-static inline void atomic_set(volatile uint64_t *var, uint64_t new)
+static inline void atomic_set(volatile u64 *var, u64 new)
 {
 	asm volatile("amoswap.d x0, %0, (%1)"
 			:
 			: "r" (new), "r" (var));
 }
 
-static inline uint64_t atomic_test(volatile uint64_t *var)
+static inline u64 atomic_test(volatile u64 *var)
 {
-	uint64_t val;
+	u64 val;
 	asm volatile("amoadd.d %0, x0, (%1)"
 			: "=r" (val)
 			: "r" (var));

@@ -1,8 +1,7 @@
 #ifndef KERNEL_UART_NS16550A_H
 #define KERNEL_UART_NS16550A_H
 
-#include <stdint.h>
-#include <stddef.h>
+#include <kernel/types.h>
 
 #define UART_DL_DIVISOR 1
 #define UART_DLL_DIVISOR UART_DL_DIVISOR & 0x00ff
@@ -33,26 +32,26 @@
 
 typedef volatile struct {
 	union {
-		uint8_t rhr;
-		uint8_t thr;
-		uint8_t dll;
+		u8 rhr;
+		u8 thr;
+		u8 dll;
 	};
 	union {
-		uint8_t ier;
-		uint8_t dlm;
+		u8 ier;
+		u8 dlm;
 	};
 	union {
-		uint8_t isr;
-		uint8_t fcr;
+		u8 isr;
+		u8 fcr;
 	};
-	uint8_t lcr;
-	uint8_t mcr;
+	u8 lcr;
+	u8 mcr;
 	union {
-		uint8_t lsr;
-		uint8_t psd;
+		u8 lsr;
+		u8 psd;
 	};
-	uint8_t msr;
-	uint8_t spr;
+	u8 msr;
+	u8 spr;
 } __attribute__((packed)) uart_mmio_t;
 
 void uart_init(void);

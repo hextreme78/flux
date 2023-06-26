@@ -91,16 +91,16 @@ static int elf_phdr_load(Elf64_Ehdr *ehdr, Elf64_Phdr *phdr, size_t elfsz,
 		proc_t *proc)
 {
 	int err;
-	uint64_t vstart = PAGEDOWN(phdr->p_vaddr);
-	uint64_t vend = PAGEROUND(phdr->p_vaddr + phdr->p_memsz);
-	uint64_t vlen = vend - vstart;
-	uint64_t npages = vlen / PAGESZ;
+	u64 vstart = PAGEDOWN(phdr->p_vaddr);
+	u64 vend = PAGEROUND(phdr->p_vaddr + phdr->p_memsz);
+	u64 vlen = vend - vstart;
+	u64 npages = vlen / PAGESZ;
 
 	if (phdr->p_filesz > phdr->p_memsz) {
 		return -ENOEXEC;
 	}
 
-	uint64_t pstart = (uint64_t) kpage_alloc(npages);
+	u64 pstart = (u64) kpage_alloc(npages);
 	if (!pstart) {
 		return -ENOMEM;
 	}
@@ -116,11 +116,11 @@ static int elf_phdr_load(Elf64_Ehdr *ehdr, Elf64_Phdr *phdr, size_t elfsz,
 	segment->vstart = vstart;
 	segment->vlen = vlen;
 
-	uint64_t pstart_offset = pstart + phdr->p_vaddr - vstart;
-	uint64_t fstart_offset = (uint64_t) ehdr + phdr->p_offset;
+	u64 pstart_offset = pstart + phdr->p_vaddr - vstart;
+	u64 fstart_offset = (u64) ehdr + phdr->p_offset;
 	memcpy((void *) pstart_offset, (void *) fstart_offset, phdr->p_filesz);
 
-	uint64_t flags = PTE_U;
+	u64 flags = PTE_U;
 	if (phdr->p_flags & PF_R) {
 		flags |= PTE_R;
 	}

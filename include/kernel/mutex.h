@@ -2,11 +2,11 @@
 #define KERNEL_MUTEX_H
 
 #include <kernel/spinlock.h>
-#include <stdint.h>
+#include <kernel/types.h>
 
 typedef struct {
 	spinlock_t sl;
-	uint64_t lock;
+	u64 lock;
 } mutex_t;
 
 void mutex_init(mutex_t *mutex);

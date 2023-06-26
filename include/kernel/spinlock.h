@@ -1,10 +1,10 @@
 #ifndef KERNEL_SPINLOCK_H
 #define KERNEL_SPINLOCK_H
 
-#include <stdint.h>
+#include <kernel/types.h>
 
 typedef volatile struct {
-	uint64_t lock;
+	u64 lock;
 } spinlock_t;
 
 void spinlock_init(spinlock_t *sl);

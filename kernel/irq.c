@@ -5,12 +5,23 @@
 #include <kernel/plic-sifive.h>
 #include <kernel/proc.h>
 #include <kernel/syscall.h>
-#include <stddef.h>
 
-static int64_t irq_cnt[NCPU];
+i64 irq_cnt[NCPU];
 
 void kerneltrap(void);
 void switch_to_scheduler(ctx_t *kcontext);
+
+void irq_save(void)
+{
+	curproc()->irq_save = irq_cnt[cpuid()];
+	curproc()->in_irq = true;
+}
+
+void irq_restore(void)
+{
+	irq_cnt[cpuid()] = curproc()->irq_save;
+	curproc()->in_irq = false;
+}
 
 void irq_on(void)
 {
@@ -30,7 +41,7 @@ void irq_off(void)
 
 static void external_irq_handler(void)
 {
-	uint32_t irq = plic_irq_claim();
+	u32 irq = plic_irq_claim();
 	switch (irq) {
 	case VIRT_PLIC_UART0:
 		uart_irq_handler();
@@ -58,9 +69,9 @@ static void kernel_timer_irq_handler(void)
 
 void kernel_irq_handler(void)
 {
-	uint64_t scause = r_scause();
-	uint64_t intr = scause & SCAUSE_INTERRUPT_MASK;
-	uint64_t excode = scause & SCAUSE_EXCEPTION_CODE_MASK;
+	u64 scause = r_scause();
+	u64 intr = scause & SCAUSE_INTERRUPT_MASK;
+	u64 excode = scause & SCAUSE_EXCEPTION_CODE_MASK;
 
 	/* interrupts are off so decrement irq_cnt */
 	irq_cnt[cpuid()]--;
@@ -129,7 +140,7 @@ static void user_timer_irq_handler(void)
 	w_sstatus((r_sstatus() | SSTATUS_SPP_S) & ~SSTATUS_SPIE);
 
 	/* route interrupts to kernel_irq_handler */
-	w_stvec((uint64_t) kerneltrap | STVEC_MODE_DIRECT);
+	w_stvec((u64) kerneltrap | STVEC_MODE_DIRECT);
 
 	/* copy trapframe saved registers to pcontext */
 	curproc()->context->ra = curproc()->trapframe->ra;
@@ -168,7 +179,7 @@ static void user_timer_irq_handler(void)
 	curproc()->context->epc = r_sepc();
 
 	/* we must return after switch_to_user call in scheduler */
-	w_sepc((uint64_t) curcpu()->context->ra);
+	w_sepc((u64) curcpu()->context->ra);
 
 	/* return to scheduler */
 	switch_to_scheduler(curcpu()->context);
@@ -176,9 +187,9 @@ static void user_timer_irq_handler(void)
 
 void user_irq_handler(void)
 {
-	uint64_t scause = r_scause();
-	uint64_t intr = scause & SCAUSE_INTERRUPT_MASK;
-	uint64_t excode = scause & SCAUSE_EXCEPTION_CODE_MASK;
+	u64 scause = r_scause();
+	u64 intr = scause & SCAUSE_INTERRUPT_MASK;
+	u64 excode = scause & SCAUSE_EXCEPTION_CODE_MASK;
 
 	/* interrupts are off so decrement irq_cnt */
 	irq_cnt[cpuid()]--;
@@ -241,6 +252,6 @@ void irq_init(void)
 void irq_hart_init(void)
 {
 	w_sie(SIE_SSIE | SIE_SEIE);
-	w_stvec(((uint64_t) kerneltrap) | STVEC_MODE_DIRECT);
+	w_stvec(((u64) kerneltrap) | STVEC_MODE_DIRECT);
 }
 

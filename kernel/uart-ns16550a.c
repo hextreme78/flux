@@ -141,7 +141,7 @@ char uart_getch_sync(void)
 void uart_irq_handler(void)
 {
 	uart_mmio_t *base = (uart_mmio_t *) VIRT_UART0;
-	uint8_t isrcode = base->isr & UART_ISR_CODE_MASK;
+	u8 isrcode = base->isr & UART_ISR_CODE_MASK;
 
 	switch (isrcode) {
 	case UART_ISR_RDR_TRIGGER_INTERRUPT:

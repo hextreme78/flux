@@ -1,14 +1,12 @@
 #ifndef KERNEL_ALLOC_H
 #define KERNEL_ALLOC_H
 
-#include <stdint.h>
-#include <stddef.h>
-#include <stdbool.h>
+#include <kernel/types.h>
 #include <kernel/list.h>
 
 #define ALIGNED_ALLOC_SZ(sz, align) ((sz) + (align) - 1)
 #define ALIGNED_ALLOC_PTR(ptr, align) ((typeof(ptr)) \
-		(((uint64_t) (ptr) + (align) - 1) & ~((align) - 1)))
+		(((u64) (ptr) + (align) - 1) & ~((align) - 1)))
 
 typedef struct {
 	bool alloc : 1;
@@ -25,7 +23,7 @@ typedef struct {
 } suballoc_t;
 
 struct alloc {
-	uint64_t npages;
+	u64 npages;
 	suballoc_t suballoc_head;
 	list_t alloc_list;
 };

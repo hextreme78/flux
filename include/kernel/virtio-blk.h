@@ -3,6 +3,7 @@
 
 #include <kernel/virtio.h>
 #include <kernel/list.h>
+#include <kernel/types.h>
 
 /* features */
 #define VIRTIO_BLK_F_SIZE_MAX     1
@@ -24,39 +25,39 @@
 typedef volatile struct {
 	virtio_mmio_t virtio_mmio;
 
-	uint64_t capacity;
-	uint32_t size_max;
-	uint32_t seg_max;
+	u64 capacity;
+	u32 size_max;
+	u32 seg_max;
 	struct virtio_blk_geometry {
-		uint16_t cylinders;
-		uint8_t heads;
-		uint8_t sectors;
+		u16 cylinders;
+		u8 heads;
+		u8 sectors;
 	} geometry;
-	uint32_t blk_size;
+	u32 blk_size;
 	struct virtio_blk_topology {
 		/* # of logical blocks per physical block (log2) */
-		uint8_t physical_block_exp;
+		u8 physical_block_exp;
 		/* offset of first aligned logical block */
-		uint8_t alignment_offset;
+		u8 alignment_offset;
 		/* suggested minimum I/O size in blocks */
-		uint16_t min_io_size;
+		u16 min_io_size;
 		/* optimal (suggested maximum) I/O size in blocks */
-		uint32_t opt_io_size;
+		u32 opt_io_size;
 	} topology;
-	uint8_t writeback;
-	uint8_t unused0[3];
-	uint32_t max_discard_sectors;
-	uint32_t max_discard_seg;
-	uint32_t discard_sector_alignment;
-	uint32_t max_write_zeroes_sectors;
-	uint32_t max_write_zeroes_seg;
-	uint8_t write_zeroes_may_unmap;
-	uint8_t unused1[3];
+	u8 writeback;
+	u8 unused0[3];
+	u32 max_discard_sectors;
+	u32 max_discard_seg;
+	u32 discard_sector_alignment;
+	u32 max_write_zeroes_sectors;
+	u32 max_write_zeroes_seg;
+	u8 write_zeroes_may_unmap;
+	u8 unused1[3];
 } /*__attribute__((packed))*/ virtio_blk_mmio_t;
 
 typedef struct {
-	uint32_t features;
-	uint64_t capacity;
+	u32 features;
+	u64 capacity;
 	virtq_t requestq;
 	virtio_blk_mmio_t *base;
 	list_t blk_list;
@@ -85,21 +86,21 @@ typedef struct {
 
 typedef struct {
 	/* head */
-	uint32_t type;
-	uint32_t unused0;
-	uint64_t sector;
+	u32 type;
+	u32 unused0;
+	u64 sector;
 	
 	/* data */
-	uint8_t data[0];
+	u8 data[0];
 
 	/* tail */
-	uint8_t status;
+	u8 status;
 } /*__attribute__((packed))*/ virtio_blk_req_t;
 
 void virtio_blk_init(void);
 void virtio_blk_dev_init(virtio_blk_mmio_t *base);
-int virtio_blk_read(virtio_blk_t *dev, uint64_t sector, void *data);
-int virtio_blk_write(virtio_blk_t *dev, uint64_t sector, void *data);
+int virtio_blk_read(virtio_blk_t *dev, u64 sector, void *data);
+int virtio_blk_write(virtio_blk_t *dev, u64 sector, void *data);
 
 #endif
 

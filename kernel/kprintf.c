@@ -6,14 +6,14 @@
 #include <stdarg.h>
 
 static mutex_t kprintf_mutex;
-uint64_t paniced = 0;
+u64 paniced = 0;
 
 void kprintf_init(void)
 {
 	mutex_init(&kprintf_mutex);
 }
 
-static void __print_decimal(void (*putch)(char), int64_t d)
+static void __print_decimal(void (*putch)(char), i64 d)
 {
 	if (!d) {
 		return;
@@ -26,7 +26,7 @@ static void __print_decimal(void (*putch)(char), int64_t d)
 	}
 }
 
-static void print_decimal(void (*putch)(char), int64_t d)
+static void print_decimal(void (*putch)(char), i64 d)
 {
 	if (!d) {
 		putch('0');
@@ -37,7 +37,7 @@ static void print_decimal(void (*putch)(char), int64_t d)
 	__print_decimal(putch, d);
 }
 
-static void __print_unsigned(void (*putch)(char), uint64_t u)
+static void __print_unsigned(void (*putch)(char), u64 u)
 {
 	if (!u) {
 		return;
@@ -46,7 +46,7 @@ static void __print_unsigned(void (*putch)(char), uint64_t u)
 	putch('0' + u % 10);
 }
 
-static void print_unsigned(void (*putch)(char), uint64_t u)
+static void print_unsigned(void (*putch)(char), u64 u)
 {
 	if (!u) {
 		putch('0');
@@ -55,7 +55,7 @@ static void print_unsigned(void (*putch)(char), uint64_t u)
 	__print_unsigned(putch, u);
 }
 
-static void __print_hex(void (*putch)(char), uint64_t x)
+static void __print_hex(void (*putch)(char), u64 x)
 {
 	if (!x) {
 		return;
@@ -68,7 +68,7 @@ static void __print_hex(void (*putch)(char), uint64_t x)
 	}
 }
 
-static void print_hex(void (*putch)(char), uint64_t x)
+static void print_hex(void (*putch)(char), u64 x)
 {
 	if (!x) {
 		putch('0');
@@ -77,7 +77,7 @@ static void print_hex(void (*putch)(char), uint64_t x)
 	__print_hex(putch, x);
 }
 
-static void __print_binary(void (*putch)(char), uint64_t b)
+static void __print_binary(void (*putch)(char), u64 b)
 {
 	if (!b) {
 		return;
@@ -86,7 +86,7 @@ static void __print_binary(void (*putch)(char), uint64_t b)
 	putch('0' + b % 2);
 }
 
-static void print_binary(void (*putch)(char), uint64_t b)
+static void print_binary(void (*putch)(char), u64 b)
 {
 	if (!b) {
 		putch('0');
@@ -105,7 +105,7 @@ static void print_str(void (*putch)(char), const char *s)
 static void print_ptr(void (*putch)(char), void *p)
 {
 	size_t zeroes = sizeof(void *) * 8 / 4;
-	uint64_t tmp = (uint64_t) p;
+	u64 tmp = (u64) p;
 	
 	while (tmp) {
 		tmp /= 16;
@@ -116,7 +116,7 @@ static void print_ptr(void (*putch)(char), void *p)
 		putch('0');
 	}
 
-	__print_hex(putch, (uint64_t) p);
+	__print_hex(putch, (u64) p);
 }
 
 static void __kprintf(void (*putch)(char), const char *fmt, va_list args)
@@ -129,16 +129,16 @@ static void __kprintf(void (*putch)(char), const char *fmt, va_list args)
 				putch('%');
 				break;
 			case 'd':
-				print_decimal(putch, va_arg(args, int64_t));
+				print_decimal(putch, va_arg(args, i64));
 				break;
 			case 'u':
-				print_unsigned(putch, va_arg(args, uint64_t));
+				print_unsigned(putch, va_arg(args, u64));
 				break;	
 			case 'x':
-				print_hex(putch, va_arg(args, uint64_t));
+				print_hex(putch, va_arg(args, u64));
 				break;	
 			case 'b':
-				print_binary(putch, va_arg(args, uint64_t));
+				print_binary(putch, va_arg(args, u64));
 				break;	
 			case 's':
 				print_str(putch, va_arg(args, const char *));

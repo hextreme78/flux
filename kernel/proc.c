@@ -5,11 +5,12 @@
 #include <kernel/kprintf.h>
 #include <kernel/elf.h>
 
-extern uint64_t trampoline;
+extern u64 trampoline;
 
 void usertrap(void);
 void switch_to_user(ctx_t *kcontext);
-void switch_userret(ctx_t *pcontext, uint64_t satp);
+void switch_userret(ctx_t *pcontext, u64 satp);
+void switch_irqret(ctx_t *pcontext);
 
 cpu_t cpus[NCPU];
 
@@ -62,10 +63,29 @@ void scheduler(void)
 
 void switch_userret_prepare(void)
 {
-	uint64_t satp = SATP_MODE_SV39 | PA_TO_PN(curproc()->pagetable);
-	void (*userret)(ctx_t *context, uint64_t satp) = (void *)
-		(VA_TRAMPOLINE + (uint64_t) switch_userret -
-		(uint64_t) &trampoline);
+	u64 satp = SATP_MODE_SV39 | PA_TO_PN(curproc()->pagetable);
+	void (*userret)(ctx_t *context, u64 satp) = (void *)
+		(VA_TRAMPOLINE + (u64) switch_userret -
+		(u64) &trampoline);
+
+	if (curproc()->in_irq) {
+		/* release process lock acquired in scheduler */
+		spinlock_release(&curproc()->lock);
+		
+		/* disable irq while switching to irq handler */
+		w_sstatus(r_sstatus() & ~SSTATUS_SIE);
+
+		/* Set spp to s-mode for sret and reset
+		 * spie to disable interrupts after sret
+		 */
+		w_sstatus((r_sstatus() & ~SSTATUS_SPIE) | SSTATUS_SPP_S);
+
+		/* user epc address for sret */
+		w_sepc(curproc()->context->epc);
+
+		/* return to irq handler */
+		switch_irqret(curproc()->context);
+	}
 
 	/* release process lock acquired in scheduler */
 	spinlock_release(&curproc()->lock);
@@ -76,7 +96,7 @@ void switch_userret_prepare(void)
 	/* set usertrap
 	 * usertrap is mapped to the highest page in addrspace
 	 */
-	w_stvec(VA_TRAMPOLINE + (uint64_t) usertrap - (uint64_t) &trampoline);
+	w_stvec(VA_TRAMPOLINE + (u64) usertrap - (u64) &trampoline);
 
 	/* Set spp to u-mode for sret and set
 	 * spie to enable interrupts after sret
@@ -137,6 +157,8 @@ static proc_t *proc_slot_alloc(void)
 
 	proc->parent = NULL;
 	list_init(&proc->children);
+
+	proc->in_irq = false;
 
 	return proc;
 }
@@ -235,10 +257,10 @@ int proc_create(void *elf, size_t elfsz)
 		proc_destroy(proc);	
 		return -ENOMEM;
 	}
-	proc->trapframe->kernel_sp = (uint64_t) proc->kstack + KSTACKNPAGES * PAGESZ;
+	proc->trapframe->kernel_sp = (u64) proc->kstack + KSTACKNPAGES * PAGESZ;
 	proc->trapframe->kernel_tp = cpuid();
 	proc->trapframe->kernel_satp = r_satp();
-	proc->trapframe->user_irq_handler = (uint64_t) user_irq_handler;
+	proc->trapframe->user_irq_handler = (u64) user_irq_handler;
 
 	proc->ustack = kpage_alloc(USTACKNPAGES);
 	if (!proc->ustack) {
@@ -283,7 +305,7 @@ int proc_create(void *elf, size_t elfsz)
 		return err;
 	}
 
-	proc->context->sp = (uint64_t) VA_USTACK + USTACKNPAGES * PAGESZ;
+	proc->context->sp = (u64) VA_USTACK + USTACKNPAGES * PAGESZ;
 
 	spinlock_acquire(&proc->lock);
 	proc->state = PROC_STATE_RUNNABLE;

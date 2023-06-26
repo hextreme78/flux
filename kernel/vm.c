@@ -5,12 +5,12 @@
 #include <kernel/errno.h>
 #include <kernel/kprintf.h>
 
-extern uint64_t *ktext;
-extern uint64_t *trampoline;
-extern uint64_t *krodata;
-extern uint64_t *kdata;
-extern uint64_t *kbss;
-extern uint64_t *kend;
+extern u64 *ktext;
+extern u64 *trampoline;
+extern u64 *krodata;
+extern u64 *kdata;
+extern u64 *kbss;
+extern u64 *kend;
 
 __attribute__((aligned(PAGESZ)))
 pte_t kpagetable[PTE_MAX];
@@ -132,7 +132,7 @@ void vm_pageunmap_all(pte_t *pagetable0)
 	}
 }
 
-int vm_pagemap(pte_t *pagetable0, uint8_t rwxug, size_t vpn, size_t ppn)
+int vm_pagemap(pte_t *pagetable0, u8 rwxug, size_t vpn, size_t ppn)
 {
 	bool pt1_alloc = false;
 	pte_t *pagetable1, *pagetable2;
@@ -186,7 +186,7 @@ int vm_pagemap(pte_t *pagetable0, uint8_t rwxug, size_t vpn, size_t ppn)
 	return 0;
 }
 
-int vm_pagemap_range(pte_t *pagetable, uint8_t rwxug,
+int vm_pagemap_range(pte_t *pagetable, u8 rwxug,
 		size_t vpn_first, size_t ppn_first, size_t npages)
 {
 	int err = 0;
@@ -250,7 +250,7 @@ void vm_init(void)
 			VIRT_VIRTIO_LEN / PAGESZ);
 
 	/* kernel text mapping */
-	uint64_t ktextsz = (uint64_t) &trampoline - (uint64_t) &ktext;
+	u64 ktextsz = (u64) &trampoline - (u64) &ktext;
 	vm_pagemap_range(kpagetable, PTE_X,
 			PA_TO_PN(&ktext),
 			PA_TO_PN(&ktext),
@@ -264,28 +264,28 @@ void vm_init(void)
 			PA_TO_PN(&trampoline));
 
 	/* kernel rodata mapping */
-	uint64_t krodatasz = (uint64_t) &kdata - (uint64_t) &krodata;
+	u64 krodatasz = (u64) &kdata - (u64) &krodata;
 	vm_pagemap_range(kpagetable, PTE_R,
 			PA_TO_PN(&krodata),
 			PA_TO_PN(&krodata),
 			krodatasz / PAGESZ);
 
 	/* kernel data mapping */
-	uint64_t kdatasz = (uint64_t) &kbss - (uint64_t) &kdata;
+	u64 kdatasz = (u64) &kbss - (u64) &kdata;
 	vm_pagemap_range(kpagetable, PTE_R | PTE_W,
 			PA_TO_PN(&kdata),
 			PA_TO_PN(&kdata),
 			kdatasz / PAGESZ);
 
 	/* kernel bss mapping */
-	uint64_t kbsssz = (uint64_t) &kend - (uint64_t) &kbss;
+	u64 kbsssz = (u64) &kend - (u64) &kbss;
 	vm_pagemap_range(kpagetable, PTE_R | PTE_W,
 			PA_TO_PN(&kbss),
 			PA_TO_PN(&kbss),
 			kbsssz / PAGESZ);
 
 	/* kernel heap mapping */
-	uint64_t kheapsz = ram_end() + 1 - (uint64_t) &kend;
+	u64 kheapsz = ram_end() + 1 - (u64) &kend;
 	vm_pagemap_range(kpagetable, PTE_R | PTE_W,
 			PA_TO_PN(&kend),
 			PA_TO_PN(&kend),

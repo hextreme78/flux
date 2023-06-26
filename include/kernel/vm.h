@@ -1,16 +1,14 @@
 #ifndef KERNEL_VM_H
 #define KERNEL_VM_H
 
-#include <stdint.h>
-#include <stdbool.h>
-#include <stddef.h>
 #include <kernel/memlayout.h>
+#include <kernel/types.h>
 
-#define PAGEDOWN(addr) ((((uint64_t) (addr)) / PAGESZ) * PAGESZ)
+#define PAGEDOWN(addr) ((((u64) (addr)) / PAGESZ) * PAGESZ)
 #define PAGEUP(addr) (PAGEDOWN(addr) + PAGESZ)
-#define PAGEROUND(addr) (((uint64_t) (addr)) % PAGESZ ? PAGEUP(addr) : (uint64_t) (addr))
-#define PA_TO_PN(addr) (((uint64_t) (addr)) >> 12)
-#define PN_TO_PA(num) (((uint64_t) (num)) << 12)
+#define PAGEROUND(addr) (((u64) (addr)) % PAGESZ ? PAGEUP(addr) : (u64) (addr))
+#define PA_TO_PN(addr) (((u64) (addr)) >> 12)
+#define PN_TO_PA(num) (((u64) (num)) << 12)
 
 #define VPN0_MASK (0x1ffull << 18)
 #define VPN1_MASK (0x1ffull << 9)
@@ -20,7 +18,7 @@
 #define VPN2(vpn) ((vpn) & VPN2_MASK)
 
 #define PTE_MAX 512
-#define PTE_RESET(ptr) (*(uint64_t *) (ptr) = 0)
+#define PTE_RESET(ptr) (*(u64 *) (ptr) = 0)
 
 #define PTE_V 1
 #define PTE_R 2
@@ -30,19 +28,19 @@
 #define PTE_G 32
 
 typedef struct {
-	uint64_t v : 1;
-	uint64_t r : 1;
-	uint64_t w : 1;
-	uint64_t x : 1;
-	uint64_t u : 1;
-	uint64_t g : 1;
-	uint64_t a : 1;
-	uint64_t d : 1;
-	uint64_t rsw : 2;
-	uint64_t ppn : 44;
-	uint64_t : 7;
-	uint64_t pbmt : 2;
-	uint64_t n : 1;
+	u64 v : 1;
+	u64 r : 1;
+	u64 w : 1;
+	u64 x : 1;
+	u64 u : 1;
+	u64 g : 1;
+	u64 a : 1;
+	u64 d : 1;
+	u64 rsw : 2;
+	u64 ppn : 44;
+	u64 : 7;
+	u64 pbmt : 2;
+	u64 n : 1;
 } __attribute__((packed)) pte_t;
 
 
@@ -55,8 +53,8 @@ bool vm_ismapped(pte_t *pagetable, size_t vpn);
 void vm_pageunmap(pte_t *pagetable0, size_t vpn);
 void vm_pageunmap_range(pte_t *pagetable, size_t vpn_first, size_t len);
 void vm_pageunmap_all(pte_t *pagetable0);
-int vm_pagemap(pte_t *pagetable0, uint8_t rwxug, size_t vpn, size_t ppn);
-int vm_pagemap_range(pte_t *pagetable, uint8_t rwxug,
+int vm_pagemap(pte_t *pagetable0, u8 rwxug, size_t vpn, size_t ppn);
+int vm_pagemap_range(pte_t *pagetable, u8 rwxug,
 		size_t vpn_first, size_t ppn_first, size_t npages);
 
 #endif

@@ -3,11 +3,11 @@
 
 void syscon_poweroff(void)
 {
-	*((volatile uint16_t *) VIRT_TEST) = SYSCON_POWEROFF;
+	*((volatile u16 *) VIRT_TEST) = SYSCON_POWEROFF;
 }
 
 void syscon_reboot(void)
 {
-	*((volatile uint16_t *) VIRT_TEST) = SYSCON_REBOOT;
+	*((volatile u16 *) VIRT_TEST) = SYSCON_REBOOT;
 }
 

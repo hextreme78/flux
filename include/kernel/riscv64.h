@@ -1,7 +1,6 @@
 #ifndef KERNEL_RISCV64_H
 #define KERNEL_RISCV64_H
 
-#include <stdint.h>
 #include <kernel/asm.h>
 #include <kernel/atomic.h>
 #include <kernel/tlb.h>

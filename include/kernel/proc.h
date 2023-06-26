@@ -5,7 +5,7 @@
 #include <kernel/vm.h>
 #include <kernel/list.h>
 #include <kernel/riscv64.h>
-#include <stdint.h>
+#include <kernel/types.h>
 
 #define PROC_STATE_KILLED    0
 #define PROC_STATE_PREPARING 1
@@ -15,81 +15,81 @@
 #define PROC_STATE_ZOMBIE    5
 
 typedef struct proc proc_t;
-typedef int64_t pid_t;
+typedef i64 pid_t;
 
 typedef struct {
-	uint64_t ra;
-	uint64_t sp;
-	uint64_t gp;
-	uint64_t tp;
-	uint64_t t0;
-	uint64_t t1;
-	uint64_t t2;
-	uint64_t fp;
-	uint64_t s1;
-	uint64_t a0;
-	uint64_t a1;
-	uint64_t a2;
-	uint64_t a3;
-	uint64_t a4;
-	uint64_t a5;
-	uint64_t a6;
-	uint64_t a7;
-	uint64_t s2;
-	uint64_t s3;
-	uint64_t s4;
-	uint64_t s5;
-	uint64_t s6;
-	uint64_t s7;
-	uint64_t s8;
-	uint64_t s9;
-	uint64_t s10;
-	uint64_t s11;
-	uint64_t t3;
-	uint64_t t4;
-	uint64_t t5;
-	uint64_t t6;
+	u64 ra;
+	u64 sp;
+	u64 gp;
+	u64 tp;
+	u64 t0;
+	u64 t1;
+	u64 t2;
+	u64 fp;
+	u64 s1;
+	u64 a0;
+	u64 a1;
+	u64 a2;
+	u64 a3;
+	u64 a4;
+	u64 a5;
+	u64 a6;
+	u64 a7;
+	u64 s2;
+	u64 s3;
+	u64 s4;
+	u64 s5;
+	u64 s6;
+	u64 s7;
+	u64 s8;
+	u64 s9;
+	u64 s10;
+	u64 s11;
+	u64 t3;
+	u64 t4;
+	u64 t5;
+	u64 t6;
 
-	uint64_t kernel_sp;
-	uint64_t kernel_tp;
-	uint64_t kernel_satp;
-	uint64_t user_irq_handler;
+	u64 kernel_sp;
+	u64 kernel_tp;
+	u64 kernel_satp;
+	u64 user_irq_handler;
 } __attribute__((packed)) trapframe_t;
 
 typedef struct {
-	uint64_t ra;
-	uint64_t sp;
-	uint64_t gp;
-	uint64_t tp;
-	uint64_t t0;
-	uint64_t t1;
-	uint64_t t2;
-	uint64_t fp;
-	uint64_t s1;
-	uint64_t a0;
-	uint64_t a1;
-	uint64_t a2;
-	uint64_t a3;
-	uint64_t a4;
-	uint64_t a5;
-	uint64_t a6;
-	uint64_t a7;
-	uint64_t s2;
-	uint64_t s3;
-	uint64_t s4;
-	uint64_t s5;
-	uint64_t s6;
-	uint64_t s7;
-	uint64_t s8;
-	uint64_t s9;
-	uint64_t s10;
-	uint64_t s11;
-	uint64_t t3;
-	uint64_t t4;
-	uint64_t t5;
-	uint64_t t6;
+	u64 ra;
+	u64 sp;
+	u64 gp;
+	u64 tp;
+	u64 t0;
+	u64 t1;
+	u64 t2;
+	u64 fp;
+	u64 s1;
+	u64 a0;
+	u64 a1;
+	u64 a2;
+	u64 a3;
+	u64 a4;
+	u64 a5;
+	u64 a6;
+	u64 a7;
+	u64 s2;
+	u64 s3;
+	u64 s4;
+	u64 s5;
+	u64 s6;
+	u64 s7;
+	u64 s8;
+	u64 s9;
+	u64 s10;
+	u64 s11;
+	u64 t3;
+	u64 t4;
+	u64 t5;
+	u64 t6;
 
-	uint64_t epc;
+	u64 epc;
 } __attribute__((packed)) ctx_t;
 
 typedef struct {
@@ -98,16 +98,16 @@ typedef struct {
 } cpu_t;
 
 typedef struct {
-	uint64_t vstart;
-	uint64_t vlen;
-	uint64_t pstart;
+	u64 vstart;
+	u64 vlen;
+	u64 pstart;
 	list_t segments;
 } segment_t;
 
 struct proc {
 	spinlock_t lock;
 	pid_t pid;
-	uint64_t state;
+	u64 state;
 	ctx_t *context;
 	trapframe_t *trapframe;
 	void *kstack;
@@ -119,6 +119,9 @@ struct proc {
 
 	proc_t *parent;
 	list_t children;
+
+	i64 irq_save;
+	bool in_irq;
 };
 
 void proc_init(void);
@@ -128,7 +131,7 @@ void scheduler(void);
 int proc_create(void *elf, size_t elfsz);
 void proc_destroy(proc_t *proc);
 
-static inline uint64_t cpuid(void)
+static inline u64 cpuid(void)
 {
 	return r_tp();
 }

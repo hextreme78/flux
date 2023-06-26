@@ -17,7 +17,7 @@ void kstart(void)
 	w_mideleg(0x1eee);
 
 	/* set kmain as return address for mret */
-	w_mepc((uint64_t) kmain);
+	w_mepc((u64) kmain);
 
 	/* configure pmp memory protection for s-mode */
 	w_pmpaddr0(0x3fffffffffffff);
