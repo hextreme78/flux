@@ -51,7 +51,7 @@ void scheduler(void)
 				curcpu()->proc = &proctable[i];
 
 				switch_to_user(curcpu()->context);
-
+	
 				curcpu()->proc = NULL;
 			}
 			spinlock_release(&proctable[i].lock);
@@ -74,7 +74,7 @@ void switch_userret_prepare(void)
 
 	/* disable irq while switching */
 	w_sstatus(r_sstatus() & ~SSTATUS_SIE);
-	
+
 	/* user epc address for sret */
 	w_sepc(curproc()->context->epc);
 

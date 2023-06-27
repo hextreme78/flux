@@ -3,6 +3,7 @@
 
 #include <kernel/virtio.h>
 #include <kernel/list.h>
+#include <kernel/spinlock.h>
 #include <kernel/types.h>
 
 /* features */
@@ -60,7 +61,9 @@ typedef struct {
 	u64 capacity;
 	virtq_t requestq;
 	virtio_blk_mmio_t *base;
-	list_t blk_list;
+	bool waitop;
+	spinlock_t lock;
+	bool isvalid;
 } virtio_blk_t;
 
 /* type of request */
@@ -98,9 +101,11 @@ typedef struct {
 } /*__attribute__((packed))*/ virtio_blk_req_t;
 
 void virtio_blk_init(void);
-void virtio_blk_dev_init(virtio_blk_mmio_t *base);
-int virtio_blk_read(virtio_blk_t *dev, u64 sector, void *data);
-int virtio_blk_write(virtio_blk_t *dev, u64 sector, void *data);
+void virtio_blk_dev_init(size_t devnum);
+int virtio_blk_read(size_t devnum, u64 sector, void *data);
+int virtio_blk_write(size_t devnum, u64 sector, void *data);
+
+void virtio_blk_irq_handler(size_t devnum);
 
 #endif
 

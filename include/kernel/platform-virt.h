@@ -34,5 +34,16 @@
 /* irq lines */
 #define VIRT_PLIC_UART0 0xa
 
+#define VIRT_PLIC_VIRTIO0 0x1
+#define VIRT_PLIC_VIRTIO1 0x2
+#define VIRT_PLIC_VIRTIO2 0x3
+#define VIRT_PLIC_VIRTIO3 0x4
+#define VIRT_PLIC_VIRTIO4 0x5
+#define VIRT_PLIC_VIRTIO5 0x6
+#define VIRT_PLIC_VIRTIO6 0x7
+#define VIRT_PLIC_VIRTIO7 0x8
+#define VIRT_PLIC_VIRTIO_IRQ(devnum) ((devnum) + 1)
+#define VIRT_PLIC_VIRTIO_DEVNUM(irq) ((irq) - 1)
+
 #endif
 

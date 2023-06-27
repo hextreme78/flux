@@ -4,7 +4,7 @@
 #include <kernel/platform-virt.h>
 #include <kernel/types.h>
 
-#define VIRTIO_MMIO_MAX 8
+#define VIRTIO_MAX 8
 #define VIRTIO_MMIO_BASE(n) ((virtio_mmio_t *) (VIRT_VIRTIO + (n) * 0x1000))
 
 #define VIRTIO_MMIO_MAGIC_VALUE 0x74726976
@@ -149,6 +149,8 @@ int virtq_init(virtio_mmio_t *base, virtq_t *virtq, u32 queue_sel);
 void virtq_destroy(virtq_t *virtq);
 u16 virtq_desc_alloc(virtq_t *virtq);
 void virtq_desc_free(virtq_t *virtq, u16 desc);
+
+void virtio_irq_handler(size_t devnum);
 
 #endif
 

@@ -3,86 +3,88 @@
 #include <kernel/alloc.h>
 #include <kernel/klib.h>
 #include <kernel/errno.h>
+#include <kernel/wchan.h>
+#include <kernel/plic-sifive.h>
 
-virtio_blk_t virtio_blk_list;
+virtio_blk_t virtio_blk_list[VIRTIO_MAX];
 
 void virtio_blk_init(void)
 {
-	list_init(&virtio_blk_list.blk_list);
+	for (size_t i = 0; i < VIRTIO_MAX; i++) {
+		virtio_blk_list[i].isvalid = false;
+		spinlock_init(&virtio_blk_list[i].lock);
+	}
 }
 
-void virtio_blk_dev_init(virtio_blk_mmio_t *base)
+void virtio_blk_dev_init(size_t devnum)
 {
 	int err;
-	virtio_blk_t *dev;
+	virtio_blk_t *dev = &virtio_blk_list[devnum];
 
-	dev = kmalloc(sizeof(*dev));
-	if (!dev) {
-		kprintf_s("virtio_blk_dev_init: no memory\n");
-		return;
-	}
-
-	dev->base = base;
-	list_add(&dev->blk_list, &virtio_blk_list.blk_list);
-
+	/* set mmio base */
+	dev->base = (virtio_blk_mmio_t *) VIRTIO_MMIO_BASE(devnum);
+	
 	/* set the driver status bit */
-	base->virtio_mmio.status |= VIRTIO_STATUS_DRIVER;
+	dev->base->virtio_mmio.status |= VIRTIO_STATUS_DRIVER;
 
 	/* read device features */
-	dev->features = base->virtio_mmio.device_features;
+	dev->features = dev->base->virtio_mmio.device_features;
 
 	/* select no features */
-	base->virtio_mmio.device_features_sel = 0;
+	dev->base->virtio_mmio.device_features_sel = 0;
 
 	/* set the features_ok status bit */
-	base->virtio_mmio.status |= VIRTIO_STATUS_FEATURES_OK;
+	dev->base->virtio_mmio.status |= VIRTIO_STATUS_FEATURES_OK;
 
 	/* re-read device status and ensure the features_ok bit is still set */
-	if (!(base->virtio_mmio.status & VIRTIO_STATUS_FEATURES_OK)) {
-		base->virtio_mmio.status |= VIRTIO_STATUS_FAILED;
-		list_del(&dev->blk_list);
-		kfree(dev);
+	if (!(dev->base->virtio_mmio.status & VIRTIO_STATUS_FEATURES_OK)) {
+		dev->base->virtio_mmio.status |= VIRTIO_STATUS_FAILED;
 		kprintf_s("virtio_blk_dev_init: features are not supported\n");
 		return;
 	}
 
 	/* init requestq */
-	err = virtq_init(&base->virtio_mmio, &dev->requestq,
+	err = virtq_init(&dev->base->virtio_mmio, &dev->requestq,
 			VIRTIO_BLK_REQUESTQ);
 	if (err) {
-		base->virtio_mmio.status |= VIRTIO_STATUS_FAILED;
-		list_del(&dev->blk_list);
-		kfree(dev);
+		dev->base->virtio_mmio.status |= VIRTIO_STATUS_FAILED;
 		kprintf_s("virtio_blk_dev_init: queue init failed (%d)\n", err);
 		return;
 	}
 
 	/* read number of blocks */
-	dev->capacity = base->capacity;
+	dev->capacity = dev->base->capacity;
 
-	/* set the driver_ok status bit */	
-	base->virtio_mmio.status |= VIRTIO_STATUS_DRIVER_OK;
+	/* set the driver_ok status bit */
+	dev->base->virtio_mmio.status |= VIRTIO_STATUS_DRIVER_OK;
 
-	char blk[512] = "testtest\n\0";
-	virtio_blk_write(dev, 0, blk);
+	/* now device entry is valid */
+	dev->isvalid = true;
 }
 
-int virtio_blk_read(virtio_blk_t *dev, u64 sector, void *data)
+int virtio_blk_read(size_t devnum, u64 sector, void *data)
 {
+	u8 status;
+	virtio_blk_t *dev = &virtio_blk_list[devnum];
 	virtio_blk_req_t *req;
 	u16 desc0, desc1, desc2;
 
+	spinlock_acquire(&dev->lock);
+
 	if (sector >= dev->capacity) {
+		spinlock_release(&dev->lock);
 		return -EIO;
 	}
 
 	req = kmalloc(sizeof(*req));
 	if (!req) {
+		spinlock_release(&dev->lock);
 		return -ENOMEM;
 	}
 
 	req->type = VIRTIO_BLK_T_IN;
 	req->sector = sector;
+	req->status = 0xff;
 
 	/* header descriptor */
 	desc0 = virtq_desc_alloc(&dev->requestq);
@@ -112,29 +114,61 @@ int virtio_blk_read(virtio_blk_t *dev, u64 sector, void *data)
 		dev->requestq.avail->idx % dev->requestq.virtqsz] = desc0;
 	dev->requestq.avail->idx++;
 
+	/* set device wait flag */
+	dev->waitop = true;
+
 	/* notify device */
 	dev->base->virtio_mmio.queue_notify = VIRTIO_BLK_REQUESTQ;
+
+	/* wait for block op */
+	while (dev->waitop) {
+		spinlock_release(&dev->lock);	
+
+		wchan_sleep();
+
+		spinlock_acquire(&dev->lock);	
+	}
+
+	/* save request status */
+	status = req->status;
+
+	virtq_desc_free(&dev->requestq, desc0);
+	virtq_desc_free(&dev->requestq, desc1);
+	virtq_desc_free(&dev->requestq, desc2);
+
+	kfree(req);
+
+	spinlock_release(&dev->lock);
+
+	if (status != VIRTIO_BLK_S_OK) {
+		return -EIO;
+	}
 
 	return 0;
 }
 
-int virtio_blk_write(virtio_blk_t *dev, u64 sector, void *data)
+int virtio_blk_write(size_t devnum, u64 sector, void *data)
 {
+	u8 status;
+	virtio_blk_t *dev = &virtio_blk_list[devnum];
 	virtio_blk_req_t *req;
 	u16 desc0, desc1, desc2;
 
+	spinlock_acquire(&dev->lock);
+	
 	if (sector >= dev->capacity) {
+		spinlock_release(&dev->lock);
 		return -EIO;
 	}
 
 	req = kmalloc(sizeof(*req));
 	if (!req) {
+		spinlock_release(&dev->lock);
 		return -ENOMEM;
 	}
 
 	req->type = VIRTIO_BLK_T_OUT;
 	req->sector = sector;
-	req->status = 0xff;
 
 	/* header descriptor */
 	desc0 = virtq_desc_alloc(&dev->requestq);
@@ -164,15 +198,50 @@ int virtio_blk_write(virtio_blk_t *dev, u64 sector, void *data)
 		dev->requestq.avail->idx % dev->requestq.virtqsz] = desc0;
 	dev->requestq.avail->idx++;
 
+	/* set device wait flag */
+	dev->waitop = true;
+
 	/* notify device */
 	dev->base->virtio_mmio.queue_notify = VIRTIO_BLK_REQUESTQ;
 
-	// wait here for op and then free descs(wchan is not implemented for now)
-	//sleep();
-	//virtq_desc_free(&dev->requestq, desc0);
-	//virtq_desc_free(&dev->requestq, desc1);
-	//virtq_desc_free(&dev->requestq, desc2);
+	/* wait for block op */
+	while (dev->waitop) {
+		spinlock_release(&dev->lock);	
+
+		wchan_sleep();
+
+		spinlock_acquire(&dev->lock);	
+	}
+
+	/* save request status */
+	status = req->status;
+
+	/* free all descriptors */
+	virtq_desc_free(&dev->requestq, desc0);
+	virtq_desc_free(&dev->requestq, desc1);
+	virtq_desc_free(&dev->requestq, desc2);
+	
+	/* free request memory */
+	kfree(req);
+
+	spinlock_release(&dev->lock);
+
+	if (status != VIRTIO_BLK_S_OK) {
+		return -EIO;
+	}
 
 	return 0;
+}
+
+void virtio_blk_irq_handler(size_t devnum)
+{
+	virtio_blk_t *dev = &virtio_blk_list[devnum];
+
+	spinlock_acquire(&dev->lock);
+
+	/* reset device wait flag */
+	dev->waitop = false;
+
+	spinlock_release(&dev->lock);
 }
 

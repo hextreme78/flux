@@ -5,6 +5,7 @@
 #include <kernel/plic-sifive.h>
 #include <kernel/proc.h>
 #include <kernel/syscall.h>
+#include <kernel/virtio.h>
 
 i64 irq_cnt[NCPU];
 
@@ -45,6 +46,16 @@ static void external_irq_handler(void)
 	switch (irq) {
 	case VIRT_PLIC_UART0:
 		uart_irq_handler();
+		break;
+	case VIRT_PLIC_VIRTIO0:
+	case VIRT_PLIC_VIRTIO1:
+	case VIRT_PLIC_VIRTIO2:
+	case VIRT_PLIC_VIRTIO3:
+	case VIRT_PLIC_VIRTIO4:
+	case VIRT_PLIC_VIRTIO5:
+	case VIRT_PLIC_VIRTIO6:
+	case VIRT_PLIC_VIRTIO7:
+		virtio_irq_handler(VIRT_PLIC_VIRTIO_DEVNUM(irq));
 		break;
 	case 0:
 		/* another hart served interrupt */
@@ -119,6 +130,9 @@ void kernel_irq_handler(void)
 	}
 
 	irq_cnt[cpuid()]++;
+
+	/* return to s-mode with enabled irq */
+	w_sstatus(r_sstatus() | SSTATUS_SPP_S | SSTATUS_SPIE);
 }
 
 static void user_timer_irq_handler(void)
@@ -200,7 +214,7 @@ void user_irq_handler(void)
 	if (intr) {
 		switch (excode) {
 		case SCAUSE_TIMER_IRQ:
-			user_timer_irq_handler();		
+			user_timer_irq_handler();
 		case SCAUSE_SOFTWARE_IRQ:
 			panic("SCAUSE_SOFTWARE_IRQ");
 		case SCAUSE_EXTERNAL_IRQ:
@@ -243,6 +257,9 @@ void user_irq_handler(void)
 
 	/* put process pagetable addr into sscratch for usertrap */
 	w_sscratch(PA_TO_PN(curproc()->pagetable) | SATP_MODE_SV39);
+
+	/* return to u-mode with enabled irq */
+	w_sstatus((r_sstatus() & ~SSTATUS_SPP_S) | SSTATUS_SPIE);
 }
 
 void irq_init(void)

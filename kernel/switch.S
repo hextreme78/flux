@@ -159,7 +159,7 @@ switch_irqret:
 	# we must not restore tp because
 	# it contains new hartid
 	# ld tp, 24(a0)
-	
+
 	ld t0, 32(a0)
 	ld t1, 40(a0)
 	ld t2, 48(a0)

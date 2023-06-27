@@ -9,14 +9,14 @@ void virtio_init(void)
 {
 	virtio_blk_init();
 
-	for (size_t i = 0; i < VIRTIO_MMIO_MAX; i++) {
+	for (size_t i = 0; i < VIRTIO_MAX; i++) {
 		virtio_mmio_t *base = VIRTIO_MMIO_BASE(i);
 		if (base->magic_value != VIRTIO_MMIO_MAGIC_VALUE) {
-			kprintf_s("virtio%d: wrong magic value, ignore\n", i);
+			kprintf_s("wrong virtio magic value, ignore\n");
 			continue;
 		}
 		if (base->version != VIRTIO_MMIO_VERSION) {
-			kprintf_s("virtio%d: wrong version, ignore\n", i);
+			kprintf_s("wrong virtio version, ignore\n");
 			continue;
 		}
 		if (base->device_id == 0) {
@@ -28,10 +28,27 @@ void virtio_init(void)
 
 		/* set the acknowledge status bit */
 		base->status = VIRTIO_STATUS_ACKNOWLEDGE;
-	
-		if (base->device_id == VIRTIO_DEVICE_ID_BLK) {
-			virtio_blk_dev_init((virtio_blk_mmio_t *) base);
+
+		switch (base->device_id) {
+			case VIRTIO_DEVICE_ID_BLK:
+				virtio_blk_dev_init(i);
+				break;
+			default:
+				kprintf_s("unknown virtio device id\n");
 		}
+	}
+}
+
+void virtio_irq_handler(size_t devnum)
+{
+	virtio_mmio_t *base = VIRTIO_MMIO_BASE(devnum);
+
+	switch (base->device_id) {
+		case VIRTIO_DEVICE_ID_BLK:
+			virtio_blk_irq_handler(devnum);
+			break;
+		default:
+			kprintf_s("unknown virtio device id\n");
 	}
 }
 

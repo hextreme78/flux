@@ -23,5 +23,13 @@ void plic_hart_init(void)
 
 	/* enable irq lines for hart */
 	plic_irq_on(VIRT_PLIC_UART0);
+	plic_irq_on(VIRT_PLIC_VIRTIO0);
+	plic_irq_on(VIRT_PLIC_VIRTIO1);
+	plic_irq_on(VIRT_PLIC_VIRTIO2);
+	plic_irq_on(VIRT_PLIC_VIRTIO3);
+	plic_irq_on(VIRT_PLIC_VIRTIO4);
+	plic_irq_on(VIRT_PLIC_VIRTIO5);
+	plic_irq_on(VIRT_PLIC_VIRTIO6);
+	plic_irq_on(VIRT_PLIC_VIRTIO7);
 }
 
