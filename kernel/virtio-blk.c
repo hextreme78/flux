@@ -5,6 +5,7 @@
 #include <kernel/errno.h>
 #include <kernel/wchan.h>
 #include <kernel/plic-sifive.h>
+#include <kernel/sched.h>
 
 virtio_blk_t virtio_blk_list[VIRTIO_MAX];
 
@@ -124,7 +125,7 @@ int virtio_blk_read(size_t devnum, u64 sector, void *data)
 	while (dev->waitop) {
 		spinlock_release(&dev->lock);	
 
-		wchan_sleep();
+		sched();
 
 		spinlock_acquire(&dev->lock);	
 	}
@@ -208,7 +209,7 @@ int virtio_blk_write(size_t devnum, u64 sector, void *data)
 	while (dev->waitop) {
 		spinlock_release(&dev->lock);	
 
-		wchan_sleep();
+		sched();
 
 		spinlock_acquire(&dev->lock);	
 	}

@@ -49,18 +49,21 @@ typedef struct {
 	u64 t4;
 	u64 t5;
 	u64 t6;
+	u64 epc;
 
-	u64 kernel_sp;
-	u64 kernel_tp;
-	u64 kernel_satp;
+	u64 cpuid;
+	u64 kstack;
+	u64 kerneltrap;
+	u64 kpagetable;
 	u64 user_irq_handler;
+	u64 usertrap;
+	u64 upagetable;
 } __attribute__((packed)) trapframe_t;
 
 typedef struct {
 	u64 ra;
 	u64 sp;
 	u64 gp;
-	u64 tp;
 	u64 t0;
 	u64 t1;
 	u64 t2;
@@ -88,13 +91,12 @@ typedef struct {
 	u64 t4;
 	u64 t5;
 	u64 t6;
-
-	u64 epc;
+	u64 kpagetable;
 } __attribute__((packed)) ctx_t;
 
 typedef struct {
-	proc_t *proc;
 	ctx_t *context;
+	proc_t *proc;
 } cpu_t;
 
 typedef struct {
@@ -106,27 +108,25 @@ typedef struct {
 
 struct proc {
 	spinlock_t lock;
+
 	pid_t pid;
 	u64 state;
+	int exit_status;
+
 	ctx_t *context;
 	trapframe_t *trapframe;
 	void *kstack;
 	void *ustack;
-	pte_t *pagetable;
+	pte_t *upagetable;
+	pte_t *kpagetable;
 	segment_t segment_list;
-
-	int exit_status;
 
 	proc_t *parent;
 	list_t children;
-
-	i64 irq_save;
-	bool in_irq;
 };
 
 void proc_init(void);
 void proc_hart_init(void);
-void scheduler(void);
 
 int proc_create(void *elf, size_t elfsz);
 void proc_destroy(proc_t *proc);
@@ -144,8 +144,7 @@ static inline cpu_t *curcpu(void)
 
 static inline proc_t *curproc(void)
 {
-	extern cpu_t cpus[NCPU];
-	return cpus[cpuid()].proc;
+	return curcpu()->proc;
 }
 
 #endif

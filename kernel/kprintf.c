@@ -1,16 +1,16 @@
 #include <kernel/kprintf.h>
 #include <kernel/uart-ns16550a.h>
-#include <kernel/mutex.h>
+#include <kernel/spinlock.h>
 #include <kernel/irq.h>
 #include <kernel/riscv64.h>
 #include <stdarg.h>
 
-static mutex_t kprintf_mutex;
+static spinlock_t kprintf_lock;
 u64 paniced = 0;
 
 void kprintf_init(void)
 {
-	mutex_init(&kprintf_mutex);
+	spinlock_init(&kprintf_lock);
 }
 
 static void __print_decimal(void (*putch)(char), i64 d)
@@ -165,10 +165,10 @@ void kprintf(const char *fmt, ...)
 
 	va_start(args, fmt);
 
-	mutex_lock(&kprintf_mutex);
+	spinlock_acquire_irqsave(&kprintf_lock);
 	__kprintf(uart_putch_async, fmt, args);
 	uart_tx_flush_async();
-	mutex_unlock(&kprintf_mutex);
+	spinlock_release_irqsave(&kprintf_lock);
 
 	va_end(args);
 }
@@ -180,10 +180,10 @@ void kprintf_s(const char *fmt, ...)
 
 	va_start(args, fmt);
 
-	mutex_lock(&kprintf_mutex);
+	spinlock_acquire_irqsave(&kprintf_lock);
 	uart_tx_flush_sync();
 	__kprintf(uart_putch_sync, fmt, args);
-	mutex_unlock(&kprintf_mutex);
+	spinlock_release_irqsave(&kprintf_lock);
 
 	va_end(args);
 }

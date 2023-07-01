@@ -206,95 +206,209 @@ int vm_pagemap_range(pte_t *pagetable, u8 rwxug,
 	return 0;
 }
 
-void vm_init(void)
+void vm_pageunmap_kpagetable(pte_t *kpagetable)
 {
-	vm_pagetable_init(kpagetable);
-
 	/* syscon mapping */
-	vm_pagemap_range(kpagetable, PTE_R | PTE_W,
-			PA_TO_PN(VIRT_TEST),
-			PA_TO_PN(VIRT_TEST),
+	vm_pageunmap_range(kpagetable, PA_TO_PN(VIRT_TEST),
 			VIRT_TEST_LEN / PAGESZ);
 
 	/* rtc mapping */
-	vm_pagemap_range(kpagetable, PTE_R | PTE_W,
+	vm_pageunmap_range(kpagetable, PA_TO_PN(VIRT_RTC),
+			VIRT_RTC_LEN / PAGESZ);
+
+	/* clint mapping */
+	vm_pageunmap_range(kpagetable, PA_TO_PN(VIRT_CLINT),
+			VIRT_CLINT_LEN / PAGESZ);
+
+	/* plic mapping */
+	vm_pageunmap_range(kpagetable, PA_TO_PN(VIRT_PLIC),
+			VIRT_PLIC_LEN / PAGESZ);
+	
+	/* uart mapping */
+	vm_pageunmap_range(kpagetable, PA_TO_PN(VIRT_UART0),
+			VIRT_UART0_LEN / PAGESZ);
+
+	/* virtio mapping */
+	vm_pageunmap_range(kpagetable, PA_TO_PN(VIRT_VIRTIO),
+			VIRT_VIRTIO_LEN / PAGESZ);
+
+	/* kernel text mapping */
+	u64 ktextsz = (u64) &trampoline - (u64) &ktext;
+	vm_pageunmap_range(kpagetable, PA_TO_PN(&ktext),
+			ktextsz / PAGESZ);
+
+	/* trampoline mapping */
+	vm_pageunmap(kpagetable, PA_TO_PN(VA_TRAMPOLINE));
+
+	/* kernel rodata mapping */
+	u64 krodatasz = (u64) &kdata - (u64) &krodata;
+	vm_pageunmap_range(kpagetable, PA_TO_PN(&krodata),
+			krodatasz / PAGESZ);
+
+	/* kernel rodata mapping */
+	u64 kdatasz = (u64) &kbss - (u64) &kdata;
+	vm_pageunmap_range(kpagetable, PA_TO_PN(&kdata),
+			kdatasz / PAGESZ);
+
+	/* kernel bss mapping */
+	u64 kbsssz = (u64) &kend - (u64) &kbss;
+	vm_pageunmap_range(kpagetable, PA_TO_PN(&kbss),
+			kbsssz / PAGESZ);
+
+	/* kernel heap mapping */
+	u64 kheapsz = ram_end() + 1 - (u64) &kend;
+	vm_pageunmap_range(kpagetable, PA_TO_PN(&kend),
+			kheapsz / PAGESZ);
+}
+
+int vm_pagemap_kpagetable(pte_t *kpagetable)
+{
+	int err;
+	vm_pagetable_init(kpagetable);
+
+	/* syscon mapping */
+	err = vm_pagemap_range(kpagetable, PTE_R | PTE_W,
+			PA_TO_PN(VIRT_TEST),
+			PA_TO_PN(VIRT_TEST),
+			VIRT_TEST_LEN / PAGESZ);
+	if (err) {
+		vm_pageunmap_kpagetable(kpagetable);
+		return err;
+	}
+
+	/* rtc mapping */
+	err = vm_pagemap_range(kpagetable, PTE_R | PTE_W,
 			PA_TO_PN(VIRT_RTC),
 			PA_TO_PN(VIRT_RTC),
 			VIRT_RTC_LEN / PAGESZ);
+	if (err) {
+		vm_pageunmap_kpagetable(kpagetable);
+		return err;
+	}
 
 	/* clint mapping
 	 * Actually we do not need to map clint because
 	 * sifive clint does not support s-mode ipi
 	 */
-	vm_pagemap_range(kpagetable, PTE_R | PTE_W,
+	err = vm_pagemap_range(kpagetable, PTE_R | PTE_W,
 			PA_TO_PN(VIRT_CLINT),
 			PA_TO_PN(VIRT_CLINT),
 			VIRT_CLINT_LEN / PAGESZ);
+	if (err) {
+		vm_pageunmap_kpagetable(kpagetable);
+		return err;
+	}
 
 	/* plic mapping */
-	vm_pagemap_range(kpagetable, PTE_R | PTE_W,
+	err = vm_pagemap_range(kpagetable, PTE_R | PTE_W,
 			PA_TO_PN(VIRT_PLIC),
 			PA_TO_PN(VIRT_PLIC),
 			VIRT_PLIC_LEN / PAGESZ);
+	if (err) {
+		vm_pageunmap_kpagetable(kpagetable);
+		return err;
+	}
 
 	/* uart mapping */
-	vm_pagemap_range(kpagetable, PTE_R | PTE_W,
+	err = vm_pagemap_range(kpagetable, PTE_R | PTE_W,
 			PA_TO_PN(VIRT_UART0),
 			PA_TO_PN(VIRT_UART0),
 			PAGEROUND(VIRT_UART0_LEN) / PAGESZ);
+	if (err) {
+		vm_pageunmap_kpagetable(kpagetable);
+		return err;
+	}
 
 	/* virtio mapping */
-	vm_pagemap_range(kpagetable, PTE_R | PTE_W,
+	err = vm_pagemap_range(kpagetable, PTE_R | PTE_W,
 			PA_TO_PN(VIRT_VIRTIO),
 			PA_TO_PN(VIRT_VIRTIO),
 			VIRT_VIRTIO_LEN / PAGESZ);
+	if (err) {
+		vm_pageunmap_kpagetable(kpagetable);
+		return err;
+	}
 
 	/* kernel text mapping */
 	u64 ktextsz = (u64) &trampoline - (u64) &ktext;
-	vm_pagemap_range(kpagetable, PTE_X,
+	err = vm_pagemap_range(kpagetable, PTE_X,
 			PA_TO_PN(&ktext),
 			PA_TO_PN(&ktext),
 			ktextsz / PAGESZ);
+	if (err) {
+		vm_pageunmap_kpagetable(kpagetable);
+		return err;
+	}
 	
 	/* trampoline mapping
 	 * We need to map trampoline code to the highest virtual page
 	 */
-	vm_pagemap(kpagetable, PTE_X | PTE_G,
+	err = vm_pagemap(kpagetable, PTE_X | PTE_G,
 			PA_TO_PN(VA_TRAMPOLINE),
 			PA_TO_PN(&trampoline));
+	if (err) {
+		vm_pageunmap_kpagetable(kpagetable);
+		return err;
+	}
 
 	/* kernel rodata mapping */
 	u64 krodatasz = (u64) &kdata - (u64) &krodata;
-	vm_pagemap_range(kpagetable, PTE_R,
+	err = vm_pagemap_range(kpagetable, PTE_R,
 			PA_TO_PN(&krodata),
 			PA_TO_PN(&krodata),
 			krodatasz / PAGESZ);
+	if (err) {
+		vm_pageunmap_kpagetable(kpagetable);
+		return err;
+	}
 
 	/* kernel data mapping */
 	u64 kdatasz = (u64) &kbss - (u64) &kdata;
-	vm_pagemap_range(kpagetable, PTE_R | PTE_W,
+	err = vm_pagemap_range(kpagetable, PTE_R | PTE_W,
 			PA_TO_PN(&kdata),
 			PA_TO_PN(&kdata),
 			kdatasz / PAGESZ);
+	if (err) {
+		vm_pageunmap_kpagetable(kpagetable);
+		return err;
+	}
 
 	/* kernel bss mapping */
 	u64 kbsssz = (u64) &kend - (u64) &kbss;
-	vm_pagemap_range(kpagetable, PTE_R | PTE_W,
+	err = vm_pagemap_range(kpagetable, PTE_R | PTE_W,
 			PA_TO_PN(&kbss),
 			PA_TO_PN(&kbss),
 			kbsssz / PAGESZ);
+	if (err) {
+		vm_pageunmap_kpagetable(kpagetable);
+		return err;
+	}
 
 	/* kernel heap mapping */
 	u64 kheapsz = ram_end() + 1 - (u64) &kend;
-	vm_pagemap_range(kpagetable, PTE_R | PTE_W,
+	err = vm_pagemap_range(kpagetable, PTE_R | PTE_W,
 			PA_TO_PN(&kend),
 			PA_TO_PN(&kend),
 			kheapsz / PAGESZ);
+	if (err) {
+		vm_pageunmap_kpagetable(kpagetable);
+		return err;
+	}
+
+	return 0;
+}
+
+void vm_init(void)
+{
+	if (vm_pagemap_kpagetable(kpagetable)) {
+		panic("vm_init failed");
+	}
 }
 
 void vm_hart_init(void)
 {
-	tlb_flush_all();
+	sfence_vma();
 	w_satp(SATP_MODE_SV39 | PA_TO_PN(kpagetable));
+	sfence_vma();
 }
 

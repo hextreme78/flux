@@ -41,7 +41,7 @@ void *kpage_alloc(size_t npages)
 		return NULL;
 	}
 
-	spinlock_acquire(&kpagemap_lock);
+	spinlock_acquire_irqsave(&kpagemap_lock);
 	for (size_t i = 0; i < maxpages - npages; i++) {
 		if (!kpagemap[i].alloc) {
 			/* check if next n - 1 pages are free */
@@ -60,7 +60,7 @@ void *kpage_alloc(size_t npages)
 			/* set last_alloc for last page */
 			kpagemap[i + npages - 1].last_alloc = true;
 
-			spinlock_release(&kpagemap_lock);
+			spinlock_release_irqsave(&kpagemap_lock);
 
 			paddr = (void *) (ram_start() + i * PAGESZ);
 
@@ -72,7 +72,7 @@ nextiter:
 		;
 	}
 
-	spinlock_release(&kpagemap_lock);
+	spinlock_release_irqsave(&kpagemap_lock);
 	return NULL;
 }
 
@@ -82,7 +82,7 @@ void kpage_free(void *mem)
 		return;
 	}
 	size_t kpagei = (((u64) mem) - ram_start()) / PAGESZ;
-	spinlock_acquire(&kpagemap_lock);
+	spinlock_acquire_irqsave(&kpagemap_lock);
 	while (1) {
 		kpagemap[kpagei].alloc = false;
 		if (kpagemap[kpagei].last_alloc) {
@@ -91,7 +91,7 @@ void kpage_free(void *mem)
 		}
 		kpagei++;
 	}
-	spinlock_release(&kpagemap_lock);
+	spinlock_release_irqsave(&kpagemap_lock);
 }
 
 static size_t __kmalloc_free_size(alloc_t *alloc)
@@ -187,19 +187,19 @@ void *kmalloc(size_t memsz)
 		return NULL;
 	}
 
-	spinlock_acquire(&kmalloc_lock);
+	spinlock_acquire_irqsave(&kmalloc_lock);
 
 	list_for_each_entry (alloc, &kmalloc_list, alloc_list) {
 		mem = __kmalloc_suballoc_existing_or_new(alloc, memsz);
 		if (mem) {
-			spinlock_release(&kmalloc_lock);
+			spinlock_release_irqsave(&kmalloc_lock);
 			return mem;
 		}
 	}
 
 	mem = __kmalloc_alloc_and_suballoc_new(&kmalloc_list, memsz);
 
-	spinlock_release(&kmalloc_lock);
+	spinlock_release_irqsave(&kmalloc_lock);
 
 	return mem;
 }
@@ -248,10 +248,10 @@ void kfree(void *mem)
 		return;
 	}
 
-	spinlock_acquire(&kmalloc_lock);
+	spinlock_acquire_irqsave(&kmalloc_lock);
 	suballoc->alloc = false;
 	suballoc = __kfree_merge_suballocs(suballoc);
 	__kfree_kpage_free(suballoc);
-	spinlock_release(&kmalloc_lock);
+	spinlock_release_irqsave(&kmalloc_lock);
 }
 

@@ -1,3 +1,4 @@
+#include <kernel/sched.h>
 #include <kernel/uart-ns16550a.h>
 #include <kernel/kprintf.h>
 #include <kernel/ram.h>
@@ -32,7 +33,6 @@ void kmain(void)
 		kprintf_init();
 		ram_init();
 		alloc_init();
-		irq_init();
 		irq_hart_init();
 		plic_init();
 		plic_hart_init();

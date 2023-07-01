@@ -7,8 +7,6 @@ __attribute__((aligned(16))) char kstack[KSTACKSIZE * NCPU];
 
 void kstart(void)
 {
-	/* switching to s-mode */
-
 	/* set mpp to s-mode for mret */
 	w_mstatus((r_mstatus() & ~MSTATUS_MPP_MASK) | MSTATUS_MPP_S);
 
@@ -25,7 +23,7 @@ void kstart(void)
 
 	/* save hart id in tp register. we can not access mhartid in s-mode */
 	w_tp(r_mhartid());
-	
+
 	/* disable paging for s-mode */
 	w_satp(0);
 

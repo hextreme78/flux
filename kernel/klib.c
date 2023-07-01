@@ -54,7 +54,7 @@ int copy_to_user(void *to, const void *from, size_t n)
 
 	for (size_t curvpage = firstvpage; curvpage <= lastvpage; curvpage++) {
 		u8 *curppage_addr;
-		pte_t *pte = vm_getpte(curproc()->pagetable, curvpage);	
+		pte_t *pte = vm_getpte(curproc()->upagetable, curvpage);	
 		if (!pte || !pte->u || !pte->w) {
 			return -1;
 		}
@@ -91,7 +91,7 @@ int copy_from_user(void *to, const void *from, size_t n)
 
 	for (size_t curvpage = firstvpage; curvpage <= lastvpage; curvpage++) {
 		u8 *curppage_addr;
-		pte_t *pte = vm_getpte(curproc()->pagetable, curvpage);	
+		pte_t *pte = vm_getpte(curproc()->upagetable, curvpage);	
 		if (!pte || !pte->u || !pte->r) {
 			return -1;
 		}

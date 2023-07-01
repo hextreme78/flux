@@ -131,7 +131,7 @@ static int elf_phdr_load(Elf64_Ehdr *ehdr, Elf64_Phdr *phdr, size_t elfsz,
 		flags |= PTE_X;
 	}
 
-	err = vm_pagemap_range(proc->pagetable, flags,
+	err = vm_pagemap_range(proc->upagetable, flags,
 			PA_TO_PN(vstart),
 			PA_TO_PN(pstart),
 			npages);
@@ -157,7 +157,7 @@ int elf_load(proc_t *proc, void *elf, size_t elfsz)
 		return -ENOEXEC;
 	}
 
-	proc->context->epc = ehdr->e_entry;
+	proc->trapframe->epc = ehdr->e_entry;
 
 	while ((curphdr = elf_phdr_next(ehdr, curphdr, elfsz))) {
 		switch (curphdr->p_type) {

@@ -57,5 +57,7 @@ int vm_pagemap(pte_t *pagetable0, u8 rwxug, size_t vpn, size_t ppn);
 int vm_pagemap_range(pte_t *pagetable, u8 rwxug,
 		size_t vpn_first, size_t ppn_first, size_t npages);
 
+int vm_pagemap_kpagetable(pte_t *kpagetable);
+void vm_pageunmap_kpagetable(pte_t *kpagetable);
 #endif
 

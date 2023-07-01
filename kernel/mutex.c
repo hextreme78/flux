@@ -1,5 +1,5 @@
 #include <kernel/mutex.h>
-#include <kernel/proc.h>
+#include <kernel/sched.h>
 
 void mutex_init(mutex_t *mutex)
 {
@@ -9,22 +9,20 @@ void mutex_init(mutex_t *mutex)
 
 void mutex_lock(mutex_t *mutex)
 {
-	spinlock_acquire(&mutex->sl);
+	spinlock_acquire_irqsave(&mutex->sl);
 	while (mutex->lock) {
-		spinlock_release(&mutex->sl);
-
-		sched_yield();
-
-		spinlock_acquire(&mutex->sl);
+		spinlock_release_irqsave(&mutex->sl);
+		sched();
+		spinlock_acquire_irqsave(&mutex->sl);
 	}
 	mutex->lock = 1;
-	spinlock_release(&mutex->sl);
+	spinlock_release_irqsave(&mutex->sl);
 }
 
 void mutex_unlock(mutex_t *mutex)
 {
-	spinlock_acquire(&mutex->sl);
+	spinlock_acquire_irqsave(&mutex->sl);
 	mutex->lock = 0;
-	spinlock_release(&mutex->sl);
+	spinlock_release_irqsave(&mutex->sl);
 }
 

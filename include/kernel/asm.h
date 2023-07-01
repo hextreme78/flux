@@ -164,5 +164,10 @@ static inline void nop(void)
 	asm volatile("nop");
 }
 
+static inline void sfence_vma(void)
+{
+	asm volatile("sfence.vma x0, x0");
+}
+
 #endif
 

@@ -60,7 +60,7 @@ void syscall(void)
 	/* return result in a0 register */
 	tf->a0 = ret;
 
-	/* increment sepc to return after ecall */
-	w_sepc(r_sepc() + 4);
+	/* increment epc to return after syscall */
+	tf->epc += 4;	
 }
 

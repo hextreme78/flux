@@ -14,7 +14,5 @@ void wchan_wait(wchan_t *wchan, spinlock_t *sl);
 void wchan_signal(wchan_t *wchan);
 void wchan_broadcast(wchan_t *wchan);
 
-void wchan_sleep(void);
-
 #endif
 

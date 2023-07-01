@@ -4,26 +4,18 @@
 #include <kernel/vm.h>
 #include <kernel/kprintf.h>
 #include <kernel/elf.h>
+#include <kernel/trampoline.h>
 
-extern u64 trampoline;
-
-void usertrap(void);
-void switch_to_user(ctx_t *kcontext);
-void switch_userret(ctx_t *pcontext, u64 satp);
-void switch_irqret(ctx_t *pcontext);
-
-cpu_t cpus[NCPU];
 
 static spinlock_t nextpid_lock;
 static volatile pid_t nextpid = 1;
 
-static spinlock_t proctable_lock;
-static proc_t proctable[NPROC];
+cpu_t cpus[NCPU];
+proc_t proctable[NPROC];
 
 void proc_init(void)
 {
 	spinlock_init(&nextpid_lock);
-	spinlock_init(&proctable_lock);
 	for (size_t i = 0; i < NPROC; i++) {
 		spinlock_init(&proctable[i].lock);
 		proctable[i].state = PROC_STATE_KILLED;
@@ -33,90 +25,27 @@ void proc_init(void)
 
 void proc_hart_init(void)
 {
-	cpus[cpuid()].proc = NULL;
-	cpus[cpuid()].context = kmalloc(sizeof(ctx_t));
-	if (!cpus[cpuid()].context) {
-		panic("proc_hart_init failed. no memory.");
+	extern pte_t kpagetable[PTE_MAX];
+	curcpu()->proc = NULL;
+	curcpu()->context = kmalloc(sizeof(*curcpu()->context));
+	if (!curcpu()->context) {
+		panic("no memory");
 	}
-}
-
-void scheduler(void)
-{
-	/* round-robin scheduler */
-	irq_on();
-	while (1) {
-		for (size_t i = 0; i < NPROC; i++) {
-			spinlock_acquire(&proctable[i].lock);
-			if (proctable[i].state == PROC_STATE_RUNNABLE) {
-				curcpu()->proc = &proctable[i];
-
-				switch_to_user(curcpu()->context);
-	
-				curcpu()->proc = NULL;
-			}
-			spinlock_release(&proctable[i].lock);
-		}
-	}
-}
-
-void switch_userret_prepare(void)
-{
-	u64 satp = SATP_MODE_SV39 | PA_TO_PN(curproc()->pagetable);
-	void (*userret)(ctx_t *context, u64 satp) = (void *)
-		(VA_TRAMPOLINE + (u64) switch_userret -
-		(u64) &trampoline);
-
-	/* set proc state */
-	curproc()->state = PROC_STATE_RUNNING;
-
-	/* release process lock acquired in scheduler */
-	spinlock_release(&curproc()->lock);
-
-	/* disable irq while switching */
-	w_sstatus(r_sstatus() & ~SSTATUS_SIE);
-
-	/* user epc address for sret */
-	w_sepc(curproc()->context->epc);
-
-	if (curproc()->in_irq) {
-		/* Set spp to s-mode for sret and reset
-		 * spie to disable interrupts after sret
-		 */
-		w_sstatus((r_sstatus() & ~SSTATUS_SPIE) | SSTATUS_SPP_S);
-
-		/* return to irq handler */
-		switch_irqret(curproc()->context);
-	}
-
-	/* set usertrap
-	 * usertrap is mapped to the highest page in addrspace
-	 */
-	w_stvec(VA_TRAMPOLINE + (u64) usertrap - (u64) &trampoline);
-
-	/* Set spp to u-mode for sret and set
-	 * spie to enable interrupts after sret
-	 */
-	w_sstatus((r_sstatus() & ~SSTATUS_SPP_S) | SSTATUS_SPIE);
-
-	/* save cpuid in trapframe */
-	curproc()->trapframe->kernel_tp = cpuid();
-
-	/* return to u-mode */
-	userret(curproc()->context, satp);
+	curcpu()->context->kpagetable = (u64) kpagetable;
 }
 
 static pid_t pid_alloc(void)
 {
 	pid_t pid;
-	spinlock_acquire(&nextpid_lock);
+	spinlock_acquire_irqsave(&nextpid_lock);
 	if (nextpid > PIDMAX) {
 		/* we reached maximum pid, so no more pids */
-		spinlock_release(&nextpid_lock);
+		spinlock_release_irqsave(&nextpid_lock);
 		return 0;
 	}
 	pid = nextpid;
 	nextpid++;
-	spinlock_release(&nextpid_lock);
+	spinlock_release_irqsave(&nextpid_lock);
 	return pid;
 }
 
@@ -126,14 +55,14 @@ static proc_t *proc_slot_alloc(void)
 	proc_t *proc = NULL;
 	
 	for (i = 0; i < NPROC; i++) {
-		spinlock_acquire(&proctable[i].lock);
+		spinlock_acquire_irqsave(&proctable[i].lock);
 		if (proctable[i].state == PROC_STATE_KILLED) {
 			proc = &proctable[i];
 			proc->state = PROC_STATE_PREPARING;
-			spinlock_release(&proctable[i].lock);
+			spinlock_release_irqsave(&proctable[i].lock);
 			break;
 		}
-		spinlock_release(&proctable[i].lock);
+		spinlock_release_irqsave(&proctable[i].lock);
 	}
 
 	if (i == NPROC) {
@@ -144,22 +73,21 @@ static proc_t *proc_slot_alloc(void)
 	proc->trapframe = NULL;
 	proc->kstack = NULL;
 	proc->ustack = NULL;
-	proc->pagetable = NULL;
+	proc->upagetable = NULL;
+	proc->kpagetable = NULL;
 	list_init(&proc->segment_list.segments);
 
 	proc->parent = NULL;
 	list_init(&proc->children);
-
-	proc->in_irq = false;
 
 	return proc;
 }
 
 void proc_destroy(proc_t *proc)
 {
-	spinlock_acquire(&proc->lock);
+	spinlock_acquire_irqsave(&proc->lock);
 	proc->state = PROC_STATE_PREPARING;
-	spinlock_release(&proc->lock);
+	spinlock_release_irqsave(&proc->lock);
 
 	proc->pid = 0;
 
@@ -179,18 +107,18 @@ void proc_destroy(proc_t *proc)
 		kpage_free(proc->trapframe);
 	}
 
-	if (proc->pagetable) {
-		vm_pageunmap(proc->pagetable, PA_TO_PN(VA_TRAMPOLINE));
-		vm_pageunmap(proc->pagetable, PA_TO_PN(VA_TRAPFRAME));
-		vm_pageunmap_range(proc->pagetable, PA_TO_PN(VA_USTACK), USTACKNPAGES);
-		vm_pageunmap(proc->pagetable, PA_TO_PN(VA_USTACK_GUARD));
+	if (proc->upagetable) {
+		vm_pageunmap(proc->upagetable, PA_TO_PN(VA_TRAMPOLINE));
+		vm_pageunmap(proc->upagetable, PA_TO_PN(VA_TRAPFRAME));
+		vm_pageunmap_range(proc->upagetable, PA_TO_PN(VA_USTACK), USTACKNPAGES);
+		vm_pageunmap(proc->upagetable, PA_TO_PN(VA_USTACK_GUARD));
 
 		/* unmap and free segments */
 		while (!list_empty(&proc->segment_list.segments)) {
 			segment_t *segment = list_next_entry(
 					&proc->segment_list,
 					segments);
-			vm_pageunmap_range(proc->pagetable,
+			vm_pageunmap_range(proc->upagetable,
 					PA_TO_PN(segment->vstart),
 					segment->vlen / PAGESZ);
 			kpage_free((void *) segment->pstart);
@@ -199,16 +127,26 @@ void proc_destroy(proc_t *proc)
 			kfree(segment);
 		}
 
-		kpage_free(proc->pagetable);
+		kpage_free(proc->upagetable);
 	}
 
-	spinlock_acquire(&proc->lock);
+	if (proc->kpagetable) {
+		vm_pageunmap(proc->kpagetable, PA_TO_PN(VA_TRAPFRAME));
+		vm_pageunmap_kpagetable(proc->kpagetable);
+
+		kpage_free(proc->kpagetable);
+	}
+
+	spinlock_acquire_irqsave(&proc->lock);
 	proc->state = PROC_STATE_KILLED;
-	spinlock_release(&proc->lock);
+	spinlock_release_irqsave(&proc->lock);
 }
 
 int proc_create(void *elf, size_t elfsz)
 {
+	void kerneltrap(void);
+	void userret(void);
+
 	int err = 0;
 	proc_t *proc;
 	pid_t pid;
@@ -231,12 +169,19 @@ int proc_create(void *elf, size_t elfsz)
 		return -ENOMEM;
 	}
 
-	proc->pagetable = kpage_alloc(1);
-	if (!proc->pagetable) {
+	proc->upagetable = kpage_alloc(1);
+	if (!proc->upagetable) {
 		proc_destroy(proc);
 		return -ENOMEM;
 	}
-	vm_pagetable_init(proc->pagetable);
+	vm_pagetable_init(proc->upagetable);
+
+	proc->kpagetable = kpage_alloc(1);
+	if (!proc->kpagetable) {
+		proc_destroy(proc);
+		return -ENOMEM;
+	}
+	vm_pagetable_init(proc->kpagetable);
 
 	proc->kstack = kpage_alloc(KSTACKNPAGES);
 	if (!proc->kstack) {
@@ -249,10 +194,6 @@ int proc_create(void *elf, size_t elfsz)
 		proc_destroy(proc);	
 		return -ENOMEM;
 	}
-	proc->trapframe->kernel_sp = (u64) proc->kstack + KSTACKNPAGES * PAGESZ;
-	proc->trapframe->kernel_tp = cpuid();
-	proc->trapframe->kernel_satp = r_satp();
-	proc->trapframe->user_irq_handler = (u64) user_irq_handler;
 
 	proc->ustack = kpage_alloc(USTACKNPAGES);
 	if (!proc->ustack) {
@@ -260,7 +201,7 @@ int proc_create(void *elf, size_t elfsz)
 		return -ENOMEM;
 	}
 
-	err = vm_pagemap(proc->pagetable, PTE_X | PTE_G,
+	err = vm_pagemap(proc->upagetable, PTE_X | PTE_G,
 			PA_TO_PN(VA_TRAMPOLINE),
 			PA_TO_PN(&trampoline));
 	if (err) {
@@ -268,7 +209,7 @@ int proc_create(void *elf, size_t elfsz)
 		return err;
 	}
 
-	err = vm_pagemap(proc->pagetable, PTE_R | PTE_W,
+	err = vm_pagemap(proc->upagetable, PTE_R | PTE_W,
 			PA_TO_PN(VA_TRAPFRAME),
 			PA_TO_PN(proc->trapframe));
 	if (err) {
@@ -276,7 +217,7 @@ int proc_create(void *elf, size_t elfsz)
 		return err;
 	}
 
-	err = vm_pagemap_range(proc->pagetable, PTE_R | PTE_W | PTE_U,
+	err = vm_pagemap_range(proc->upagetable, PTE_R | PTE_W | PTE_U,
 			PA_TO_PN(VA_USTACK),
 			PA_TO_PN(proc->ustack),
 			USTACKNPAGES);
@@ -285,7 +226,21 @@ int proc_create(void *elf, size_t elfsz)
 		return err;
 	}
 
-	err = vm_pagemap(proc->pagetable, 0, PA_TO_PN(VA_USTACK_GUARD), 0);
+	err = vm_pagemap(proc->upagetable, 0, PA_TO_PN(VA_USTACK_GUARD), 0);
+	if (err) {
+		proc_destroy(proc);
+		return err;
+	}
+
+	err = vm_pagemap_kpagetable(proc->kpagetable);
+	if (err) {
+		proc_destroy(proc);
+		return err;
+	}
+
+	err = vm_pagemap(proc->kpagetable, PTE_R | PTE_W,
+			PA_TO_PN(VA_TRAPFRAME),
+			PA_TO_PN(proc->trapframe));
 	if (err) {
 		proc_destroy(proc);
 		return err;
@@ -297,17 +252,22 @@ int proc_create(void *elf, size_t elfsz)
 		return err;
 	}
 
-	proc->context->sp = (u64) VA_USTACK + USTACKNPAGES * PAGESZ;
+	proc->trapframe->sp = (u64) VA_USTACK + USTACKNPAGES * PAGESZ;
+	proc->trapframe->kstack = (u64) proc->kstack + KSTACKNPAGES * PAGESZ;
+	proc->trapframe->kerneltrap = (u64) kerneltrap;
+	proc->trapframe->kpagetable = (u64) proc->kpagetable;
+	proc->trapframe->user_irq_handler = (u64) user_irq_handler;
+	proc->trapframe->usertrap = (u64) trampoline_usertrap;
+	proc->trapframe->upagetable = (u64) proc->upagetable;
 
-	spinlock_acquire(&proc->lock);
+	proc->context->sp = proc->trapframe->kstack;
+	proc->context->ra = (u64) userret;
+	proc->context->kpagetable = (u64) proc->kpagetable;
+
+	spinlock_acquire_irqsave(&proc->lock);
 	proc->state = PROC_STATE_RUNNABLE;
-	spinlock_release(&proc->lock);
+	spinlock_release_irqsave(&proc->lock);
 
 	return 0;
-}
-
-void sched_yield(void)
-{
-
 }
 
