@@ -116,20 +116,11 @@ int virtio_blk_read(size_t devnum, u64 sector, void *data)
 		dev->requestq.avail->idx % dev->requestq.virtqsz] = desc0;
 	dev->requestq.avail->idx++;
 
-	/* set device wait flag */
-	dev->waitop = true;
-
 	/* notify device */
 	dev->base->virtio_mmio.queue_notify = VIRTIO_BLK_REQUESTQ;
 
 	/* wait for block op */
-	while (dev->waitop) {
-		spinlock_release_irqrestore(&dev->lock, irqflags);	
-
-		sched();
-
-		spinlock_acquire_irqsave(&dev->lock, irqflags);
-	}
+	wchan_sleep(dev, &dev->lock);
 
 	/* save request status */
 	status = req->status;
@@ -204,7 +195,7 @@ int virtio_blk_write(size_t devnum, u64 sector, void *data)
 	/* notify device */
 	dev->base->virtio_mmio.queue_notify = VIRTIO_BLK_REQUESTQ;
 
-	/* wait for op completion */
+	/* wait for block op */
 	wchan_sleep(dev, &dev->lock);
 
 	/* save request status */

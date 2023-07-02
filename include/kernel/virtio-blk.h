@@ -47,7 +47,6 @@ struct virtio_blk {
 	u64 capacity;
 	virtq_t requestq;
 	virtio_blk_mmio_t *base;
-	bool waitop;
 	spinlock_t lock;
 	bool isvalid;
 };
