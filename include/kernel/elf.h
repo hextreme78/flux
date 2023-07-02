@@ -1,9 +1,18 @@
 #ifndef KERNEL_ELF_H
 #define KERNEL_ELF_H
 
+#include <kernel/types.h>
+
+typedef u64 Elf64_Addr;
+typedef u64 Elf64_Off;
+typedef u16 Elf64_Half;
+typedef u32 Elf64_Word;
+typedef i32 Elf64_Sword;
+typedef u64 Elf64_Xword;
+typedef i64 Elf64_Sxword;
+
 #include <kernel/proc.h>
 #include <kernel/errno.h>
-#include <kernel/types.h>
 
 /* e_ident indexes */
 #define EI_MAG0       0  
@@ -62,14 +71,6 @@
 /* e_version field */
 #define EV_NONE    0
 #define EV_CURRENT 1
-
-typedef u64 Elf64_Addr;
-typedef u64 Elf64_Off;
-typedef u16 Elf64_Half;
-typedef u32 Elf64_Word;
-typedef i32 Elf64_Sword;
-typedef u64 Elf64_Xword;
-typedef i64 Elf64_Sxword;
 
 typedef struct {
 	unsigned char e_ident[EI_NIDENT];

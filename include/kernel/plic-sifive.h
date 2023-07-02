@@ -1,9 +1,9 @@
 #ifndef KERNEL_PLIC_SIFIVE_H
 #define KERNEL_PLIC_SIFIVE_H
 
+#include <kernel/types.h>
 #include <kernel/platform-virt.h>
 #include <kernel/proc.h>
-#include <kernel/types.h>
 
 void plic_init(void);
 void plic_hart_init(void);

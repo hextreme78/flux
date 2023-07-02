@@ -1,6 +1,9 @@
 #ifndef KERNEL_RISCV64_DEFS_H
 #define KERNEL_RISCV64_DEFS_H
 
+#define RISCV64_STACK_ALIGN 16
+#define RISCV64_ISR_ALIGN 4
+
 #define MSTATUS_MPP_MASK (3 << 11)
 #define MSTATUS_MPP_S (1 << 11)
 #define MSTATUS_MIE (1 << 3)

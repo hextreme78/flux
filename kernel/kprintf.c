@@ -161,14 +161,15 @@ badfmt:
 /* kprintf will not work while interrupts are off */
 void kprintf(const char *fmt, ...)
 {
+	int irqflags;
 	va_list args;
 
 	va_start(args, fmt);
 
-	spinlock_acquire_irqsave(&kprintf_lock);
+	spinlock_acquire_irqsave(&kprintf_lock, irqflags);
 	__kprintf(uart_putch_async, fmt, args);
 	uart_tx_flush_async();
-	spinlock_release_irqsave(&kprintf_lock);
+	spinlock_release_irqrestore(&kprintf_lock, irqflags);
 
 	va_end(args);
 }
@@ -176,14 +177,15 @@ void kprintf(const char *fmt, ...)
 /* use kprintf_s when interrupts are off */
 void kprintf_s(const char *fmt, ...)
 {
+	int irqflags;
 	va_list args;
 
 	va_start(args, fmt);
 
-	spinlock_acquire_irqsave(&kprintf_lock);
+	spinlock_acquire_irqsave(&kprintf_lock, irqflags);
 	uart_tx_flush_sync();
 	__kprintf(uart_putch_sync, fmt, args);
-	spinlock_release_irqsave(&kprintf_lock);
+	spinlock_release_irqrestore(&kprintf_lock, irqflags);
 
 	va_end(args);
 }

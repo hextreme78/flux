@@ -1,51 +1,52 @@
 #include <kernel/wchan.h>
 #include <kernel/sched.h>
+#include <kernel/irq.h>
 
-void wchan_init(wchan_t *wchan)
+void wchan_sleep(void *wchan, spinlock_t *sl)
 {
-	spinlock_init(&wchan->lock);
-	wchan->wait = 0;
-}
-
-void wchan_wait(wchan_t *wchan, spinlock_t *sl)
-{
-	u64 wait;
+	int irqflags;
+	spinlock_acquire_irqsave(&curproc()->lock, irqflags);
 	spinlock_release(sl);
 
-	spinlock_acquire(&wchan->lock);
-	wait = wchan->wait;
-	wchan->wait++;
+	curproc()->state = PROC_STATE_STOPPED;
+	curproc()->wchan = wchan;
 
-	while (wchan->wait > wait) {
-		spinlock_release(&wchan->lock);
+	context_switch(curproc()->context, curcpu()->context);
 
-		sched();
-
-		spinlock_acquire(&wchan->lock);
-	}
-
-	if (wchan->wait) {
-		wchan->wait--;
-	}
-
-	spinlock_release(&wchan->lock);
+	curproc()->state = PROC_STATE_RUNNING;
+	curproc()->wchan = NULL;
 
 	spinlock_acquire(sl);
+	spinlock_release_irqrestore(&curproc()->lock, irqflags);
 }
 
-void wchan_signal(wchan_t *wchan)
+void wchan_signal(void *wchan)
 {
-	spinlock_acquire(&wchan->lock);
-	if (wchan->wait) {
-		wchan->wait--;
+	extern proc_t proctable[NPROC];
+	int irqflags;
+	for (size_t i = 0; i < NPROC; i++) {
+		spinlock_acquire_irqsave(&proctable[i].lock, irqflags);
+		if (proctable[i].state == PROC_STATE_STOPPED &&
+				proctable[i].wchan == wchan) {
+			proctable[i].state = PROC_STATE_RUNNABLE;
+			spinlock_release_irqrestore(&proctable[i].lock, irqflags);
+			return;
+		}
+		spinlock_release_irqrestore(&proctable[i].lock, irqflags);
 	}
-	spinlock_release(&wchan->lock);
 }
 
-void wchan_broadcast(wchan_t *wchan)
+void wchan_broadcast(void *wchan)
 {
-	spinlock_acquire(&wchan->lock);
-	wchan->wait = 0;
-	spinlock_release(&wchan->lock);
+	extern proc_t proctable[NPROC];
+	int irqflags;
+	for (size_t i = 0; i < NPROC; i++) {
+		spinlock_acquire_irqsave(&proctable[i].lock, irqflags);
+		if (proctable[i].state == PROC_STATE_STOPPED &&
+				proctable[i].wchan == wchan) {
+			proctable[i].state = PROC_STATE_RUNNABLE;
+		}
+		spinlock_release_irqrestore(&proctable[i].lock, irqflags);
+	}
 }
 

@@ -1,8 +1,27 @@
 #ifndef KERNEL_VM_H
 #define KERNEL_VM_H
 
-#include <kernel/memlayout.h>
 #include <kernel/types.h>
+
+typedef struct pte pte_t;
+
+struct pte {
+	u64 v : 1;
+	u64 r : 1;
+	u64 w : 1;
+	u64 x : 1;
+	u64 u : 1;
+	u64 g : 1;
+	u64 a : 1;
+	u64 d : 1;
+	u64 rsw : 2;
+	u64 ppn : 44;
+	u64 : 7;
+	u64 pbmt : 2;
+	u64 n : 1;
+} __attribute__((packed));
+
+#include <kernel/memlayout.h>
 
 #define PAGEDOWN(addr) ((((u64) (addr)) / PAGESZ) * PAGESZ)
 #define PAGEUP(addr) (PAGEDOWN(addr) + PAGESZ)
@@ -27,23 +46,6 @@
 #define PTE_U 16
 #define PTE_G 32
 
-typedef struct {
-	u64 v : 1;
-	u64 r : 1;
-	u64 w : 1;
-	u64 x : 1;
-	u64 u : 1;
-	u64 g : 1;
-	u64 a : 1;
-	u64 d : 1;
-	u64 rsw : 2;
-	u64 ppn : 44;
-	u64 : 7;
-	u64 pbmt : 2;
-	u64 n : 1;
-} __attribute__((packed)) pte_t;
-
-
 void vm_init(void);
 void vm_hart_init(void);
 
@@ -59,5 +61,6 @@ int vm_pagemap_range(pte_t *pagetable, u8 rwxug,
 
 int vm_pagemap_kpagetable(pte_t *kpagetable);
 void vm_pageunmap_kpagetable(pte_t *kpagetable);
+
 #endif
 

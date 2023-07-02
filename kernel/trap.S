@@ -14,7 +14,7 @@
 # we should also set stie bit to trigger s-mode 
 # timer interrupt handler immediately after mret
 .global timertrap
-.align 4
+.align RISCV64_ISR_ALIGN
 timertrap:
 	csrrw a0, mscratch, a0
 
@@ -47,7 +47,7 @@ timertrap:
 # we want to stop ram probing because of load fault
 # just set raminitstop to 1 and increment sepc
 .global ramtrap
-.align 4
+.align RISCV64_ISR_ALIGN
 ramtrap:
 	addi sp, sp, -16
 	sd a0, 0(sp)
@@ -68,7 +68,7 @@ ramtrap:
 	sret
 
 .global kerneltrap
-.align 4
+.align RISCV64_ISR_ALIGN
 kerneltrap:
 	# save registers
 	addi sp, sp, -256

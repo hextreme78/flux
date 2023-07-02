@@ -6,11 +6,12 @@
 void sys__exit(int status)
 {
 	curproc()->exit_status = status;
-	zombie();
+	sched_zombie();
 }
 
-u64 sys_wait(int *status)
+pid_t sys_wait(int *status)
 {
+	int irqflags;
 	u64 ret;
 	proc_t *child = NULL;
 
@@ -21,20 +22,20 @@ u64 sys_wait(int *status)
 
 	child = list_next_entry(curproc(), children);
 
-	spinlock_acquire(&child->lock);	
+	spinlock_acquire_irqsave(&child->lock, irqflags);	
 
 	/* wait for zombie child */
 	while (child->state != PROC_STATE_ZOMBIE) {
-		spinlock_release(&child->lock);
+		spinlock_release_irqrestore(&child->lock, irqflags);
 
-		//wchan_sleep();
+		sched();
 
-		spinlock_acquire(&child->lock);	
+		spinlock_acquire_irqsave(&child->lock, irqflags);	
 	}
 
 	/* copy exit status to user memory */
 	if (copy_to_user(status, &child->exit_status, sizeof(int)) < 0) {
-		spinlock_release(&child->lock);
+		spinlock_release_irqrestore(&child->lock, irqflags);
 		return -EINVAL;
 	}
 
@@ -43,17 +44,18 @@ u64 sys_wait(int *status)
 
 	proc_destroy(child);
 
-	spinlock_release(&child->lock);
+	spinlock_release_irqrestore(&child->lock, irqflags);
 
 	return ret;
 }
 
-u64 sys_getpid(void)
+pid_t sys_getpid(void)
 {
+	int irqflags;
 	pid_t pid;
-	spinlock_acquire(&curproc()->lock);
+	spinlock_acquire_irqsave(&curproc()->lock, irqflags);
 	pid = curproc()->pid;
-	spinlock_release(&curproc()->lock);
+	spinlock_release_irqrestore(&curproc()->lock, irqflags);
 	return pid;
 }
 

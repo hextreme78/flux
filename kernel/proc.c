@@ -6,7 +6,6 @@
 #include <kernel/elf.h>
 #include <kernel/trampoline.h>
 
-
 static spinlock_t nextpid_lock;
 static volatile pid_t nextpid = 1;
 
@@ -36,33 +35,35 @@ void proc_hart_init(void)
 
 static pid_t pid_alloc(void)
 {
+	int irqflags;
 	pid_t pid;
-	spinlock_acquire_irqsave(&nextpid_lock);
+	spinlock_acquire_irqsave(&nextpid_lock, irqflags);
 	if (nextpid > PIDMAX) {
 		/* we reached maximum pid, so no more pids */
-		spinlock_release_irqsave(&nextpid_lock);
+		spinlock_release_irqrestore(&nextpid_lock, irqflags);
 		return 0;
 	}
 	pid = nextpid;
 	nextpid++;
-	spinlock_release_irqsave(&nextpid_lock);
+	spinlock_release_irqrestore(&nextpid_lock, irqflags);
 	return pid;
 }
 
 static proc_t *proc_slot_alloc(void)
 {
+	int irqflags;
 	size_t i;
 	proc_t *proc = NULL;
-	
+
 	for (i = 0; i < NPROC; i++) {
-		spinlock_acquire_irqsave(&proctable[i].lock);
+		spinlock_acquire_irqsave(&proctable[i].lock, irqflags);
 		if (proctable[i].state == PROC_STATE_KILLED) {
 			proc = &proctable[i];
 			proc->state = PROC_STATE_PREPARING;
-			spinlock_release_irqsave(&proctable[i].lock);
+			spinlock_release_irqrestore(&proctable[i].lock, irqflags);
 			break;
 		}
-		spinlock_release_irqsave(&proctable[i].lock);
+		spinlock_release_irqrestore(&proctable[i].lock, irqflags);
 	}
 
 	if (i == NPROC) {
@@ -80,14 +81,19 @@ static proc_t *proc_slot_alloc(void)
 	proc->parent = NULL;
 	list_init(&proc->children);
 
+	proc->errno = 0;
+
+	proc->wchan = NULL;
+
 	return proc;
 }
 
 void proc_destroy(proc_t *proc)
 {
-	spinlock_acquire_irqsave(&proc->lock);
+	int irqflags;
+	spinlock_acquire_irqsave(&proc->lock, irqflags);
 	proc->state = PROC_STATE_PREPARING;
-	spinlock_release_irqsave(&proc->lock);
+	spinlock_release_irqrestore(&proc->lock, irqflags);
 
 	proc->pid = 0;
 
@@ -137,13 +143,15 @@ void proc_destroy(proc_t *proc)
 		kpage_free(proc->kpagetable);
 	}
 
-	spinlock_acquire_irqsave(&proc->lock);
+	spinlock_acquire_irqsave(&proc->lock, irqflags);
 	proc->state = PROC_STATE_KILLED;
-	spinlock_release_irqsave(&proc->lock);
+	spinlock_release_irqrestore(&proc->lock, irqflags);
 }
 
 int proc_create(void *elf, size_t elfsz)
 {
+	int irqflags;
+	void user_irq_handler();
 	void kerneltrap(void);
 	void userret(void);
 
@@ -163,7 +171,7 @@ int proc_create(void *elf, size_t elfsz)
 	}
 	proc->pid = pid;
 
-	proc->context = kmalloc(sizeof(ctx_t));
+	proc->context = kmalloc(sizeof(context_t));
 	if (!proc->context) {
 		proc_destroy(proc);
 		return -ENOMEM;
@@ -264,9 +272,9 @@ int proc_create(void *elf, size_t elfsz)
 	proc->context->ra = (u64) userret;
 	proc->context->kpagetable = (u64) proc->kpagetable;
 
-	spinlock_acquire_irqsave(&proc->lock);
+	spinlock_acquire_irqsave(&proc->lock, irqflags);
 	proc->state = PROC_STATE_RUNNABLE;
-	spinlock_release_irqsave(&proc->lock);
+	spinlock_release_irqrestore(&proc->lock, irqflags);
 
 	return 0;
 }

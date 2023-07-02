@@ -1,29 +1,15 @@
 #ifndef KERNEL_VIRTIO_BLK_H
 #define KERNEL_VIRTIO_BLK_H
 
-#include <kernel/virtio.h>
-#include <kernel/list.h>
-#include <kernel/spinlock.h>
 #include <kernel/types.h>
+#include <kernel/virtio.h>
+#include <kernel/spinlock.h>
 
-/* features */
-#define VIRTIO_BLK_F_SIZE_MAX     1
-#define VIRTIO_BLK_F_SEG_MAX      2
-#define VIRTIO_BLK_F_GEOMETRY     4
-#define VIRTIO_BLK_F_RO           5
-#define VIRTIO_BLK_F_BLK_SIZE     6
-#define VIRTIO_BLK_F_FLUSH        9
-#define VIRTIO_BLK_F_TOPOLOGY     10
-#define VIRTIO_BLK_F_CONFIG_WCE   11
-#define VIRTIO_BLK_F_DISCARD      13
-#define VIRTIO_BLK_F_WRITE_ZEROES 14
+typedef volatile struct virtio_blk_mmio virtio_blk_mmio_t;
+typedef struct virtio_blk               virtio_blk_t;
+typedef struct virtio_blk_req           virtio_blk_req_t;
 
-/* blk queues */
-#define VIRTIO_BLK_REQUESTQ 0
-
-#define VIRTIO_BLK_SIZE 512
-
-typedef volatile struct {
+struct virtio_blk_mmio {
 	virtio_mmio_t virtio_mmio;
 
 	u64 capacity;
@@ -54,9 +40,9 @@ typedef volatile struct {
 	u32 max_write_zeroes_seg;
 	u8 write_zeroes_may_unmap;
 	u8 unused1[3];
-} /*__attribute__((packed))*/ virtio_blk_mmio_t;
+} /*__attribute__((packed))*/;
 
-typedef struct {
+struct virtio_blk {
 	u32 features;
 	u64 capacity;
 	virtq_t requestq;
@@ -64,7 +50,39 @@ typedef struct {
 	bool waitop;
 	spinlock_t lock;
 	bool isvalid;
-} virtio_blk_t;
+};
+
+struct virtio_blk_req {
+	/* head */
+	u32 type;
+	u32 unused0;
+	u64 sector;
+	
+	/* data */
+	u8 data[0];
+
+	/* tail */
+	u8 status;
+} /*__attribute__((packed))*/;
+
+#include <kernel/list.h>
+
+/* features */
+#define VIRTIO_BLK_F_SIZE_MAX     1
+#define VIRTIO_BLK_F_SEG_MAX      2
+#define VIRTIO_BLK_F_GEOMETRY     4
+#define VIRTIO_BLK_F_RO           5
+#define VIRTIO_BLK_F_BLK_SIZE     6
+#define VIRTIO_BLK_F_FLUSH        9
+#define VIRTIO_BLK_F_TOPOLOGY     10
+#define VIRTIO_BLK_F_CONFIG_WCE   11
+#define VIRTIO_BLK_F_DISCARD      13
+#define VIRTIO_BLK_F_WRITE_ZEROES 14
+
+/* blk queues */
+#define VIRTIO_BLK_REQUESTQ 0
+
+#define VIRTIO_BLK_SIZE 512
 
 /* type of request */
 #define VIRTIO_BLK_T_IN           0
@@ -86,19 +104,6 @@ typedef struct {
 #define VIRTIO_BLK_S_OK     0
 #define VIRTIO_BLK_S_IOERR  1
 #define VIRTIO_BLK_S_UNSUPP 2
-
-typedef struct {
-	/* head */
-	u32 type;
-	u32 unused0;
-	u64 sector;
-	
-	/* data */
-	u8 data[0];
-
-	/* tail */
-	u8 status;
-} /*__attribute__((packed))*/ virtio_blk_req_t;
 
 void virtio_blk_init(void);
 void virtio_blk_dev_init(size_t devnum);

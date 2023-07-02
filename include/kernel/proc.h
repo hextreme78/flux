@@ -1,11 +1,19 @@
 #ifndef KERNEL_PROC_H
 #define KERNEL_PROC_H
 
-#include <kernel/spinlock.h>
+#include <kernel/types.h>
+
+typedef struct trapframe trapframe_t;
+typedef struct context   context_t;
+typedef struct cpu       cpu_t;
+typedef struct segment   segment_t;
+typedef i64              pid_t;
+typedef struct proc      proc_t;
+
 #include <kernel/vm.h>
 #include <kernel/list.h>
 #include <kernel/riscv64.h>
-#include <kernel/types.h>
+#include <kernel/spinlock.h>
 
 #define PROC_STATE_KILLED    0
 #define PROC_STATE_PREPARING 1
@@ -14,10 +22,7 @@
 #define PROC_STATE_STOPPED   4
 #define PROC_STATE_ZOMBIE    5
 
-typedef struct proc proc_t;
-typedef i64 pid_t;
-
-typedef struct {
+struct trapframe {
 	u64 ra;
 	u64 sp;
 	u64 gp;
@@ -58,9 +63,9 @@ typedef struct {
 	u64 user_irq_handler;
 	u64 usertrap;
 	u64 upagetable;
-} __attribute__((packed)) trapframe_t;
+} __attribute__((packed));
 
-typedef struct {
+struct context {
 	u64 ra;
 	u64 sp;
 	u64 gp;
@@ -92,28 +97,31 @@ typedef struct {
 	u64 t5;
 	u64 t6;
 	u64 kpagetable;
-} __attribute__((packed)) ctx_t;
+} __attribute__((packed));
 
-typedef struct {
-	ctx_t *context;
+struct cpu {
+	context_t *context;
 	proc_t *proc;
-} cpu_t;
+};
 
-typedef struct {
+struct segment {
 	u64 vstart;
 	u64 vlen;
 	u64 pstart;
 	list_t segments;
-} segment_t;
+};
 
 struct proc {
 	spinlock_t lock;
+	u64 state;
+	void *wchan;
+
+	int errno;
 
 	pid_t pid;
-	u64 state;
 	int exit_status;
 
-	ctx_t *context;
+	context_t *context;
 	trapframe_t *trapframe;
 	void *kstack;
 	void *ustack;

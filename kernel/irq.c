@@ -106,6 +106,7 @@ static void user_timer_irq_handler(void)
 	 */
 	w_sie(r_sie() & ~SIE_STIE);
 
+	/* switch to the next task */
 	sched();
 }
 

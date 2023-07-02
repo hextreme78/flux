@@ -36,12 +36,13 @@ void alloc_init(void)
 
 void *kpage_alloc(size_t npages)
 {
+	int irqflags;
 	void *paddr;
 	if (maxpages < npages) {
 		return NULL;
 	}
 
-	spinlock_acquire_irqsave(&kpagemap_lock);
+	spinlock_acquire_irqsave(&kpagemap_lock, irqflags);
 	for (size_t i = 0; i < maxpages - npages; i++) {
 		if (!kpagemap[i].alloc) {
 			/* check if next n - 1 pages are free */
@@ -60,7 +61,7 @@ void *kpage_alloc(size_t npages)
 			/* set last_alloc for last page */
 			kpagemap[i + npages - 1].last_alloc = true;
 
-			spinlock_release_irqsave(&kpagemap_lock);
+			spinlock_release_irqrestore(&kpagemap_lock, irqflags);
 
 			paddr = (void *) (ram_start() + i * PAGESZ);
 
@@ -72,17 +73,18 @@ nextiter:
 		;
 	}
 
-	spinlock_release_irqsave(&kpagemap_lock);
+	spinlock_release_irqrestore(&kpagemap_lock, irqflags);
 	return NULL;
 }
 
 void kpage_free(void *mem)
 {
+	int irqflags;
 	if ((u64) mem < ram_start()) {
 		return;
 	}
 	size_t kpagei = (((u64) mem) - ram_start()) / PAGESZ;
-	spinlock_acquire_irqsave(&kpagemap_lock);
+	spinlock_acquire_irqsave(&kpagemap_lock, irqflags);
 	while (1) {
 		kpagemap[kpagei].alloc = false;
 		if (kpagemap[kpagei].last_alloc) {
@@ -91,7 +93,7 @@ void kpage_free(void *mem)
 		}
 		kpagei++;
 	}
-	spinlock_release_irqsave(&kpagemap_lock);
+	spinlock_release_irqrestore(&kpagemap_lock, irqflags);
 }
 
 static size_t __kmalloc_free_size(alloc_t *alloc)
@@ -180,6 +182,7 @@ static void *__kmalloc_alloc_and_suballoc_new(alloc_t *head, size_t memsz)
 
 void *kmalloc(size_t memsz)
 {
+	int irqflags;
 	void *mem;
 	alloc_t *alloc;
 
@@ -187,19 +190,19 @@ void *kmalloc(size_t memsz)
 		return NULL;
 	}
 
-	spinlock_acquire_irqsave(&kmalloc_lock);
+	spinlock_acquire_irqsave(&kmalloc_lock, irqflags);
 
 	list_for_each_entry (alloc, &kmalloc_list, alloc_list) {
 		mem = __kmalloc_suballoc_existing_or_new(alloc, memsz);
 		if (mem) {
-			spinlock_release_irqsave(&kmalloc_lock);
+			spinlock_release_irqrestore(&kmalloc_lock, irqflags);
 			return mem;
 		}
 	}
 
 	mem = __kmalloc_alloc_and_suballoc_new(&kmalloc_list, memsz);
 
-	spinlock_release_irqsave(&kmalloc_lock);
+	spinlock_release_irqrestore(&kmalloc_lock, irqflags);
 
 	return mem;
 }
@@ -242,16 +245,17 @@ static void __kfree_kpage_free(suballoc_t *suballoc)
 
 void kfree(void *mem)
 {
+	int irqflags;
 	suballoc_t *suballoc = (suballoc_t *) mem - 1;
 
 	if (!mem) {
 		return;
 	}
 
-	spinlock_acquire_irqsave(&kmalloc_lock);
+	spinlock_acquire_irqsave(&kmalloc_lock, irqflags);
 	suballoc->alloc = false;
 	suballoc = __kfree_merge_suballocs(suballoc);
 	__kfree_kpage_free(suballoc);
-	spinlock_release_irqsave(&kmalloc_lock);
+	spinlock_release_irqrestore(&kmalloc_lock, irqflags);
 }
 

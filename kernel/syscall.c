@@ -6,7 +6,13 @@
 
 void debug_printint(i64 a0)
 {
-	kprintf_s("debug_printint %d\n", a0);
+	kprintf("debug_printint %d\n", a0);
+
+	char data[512] = "hello, world!!!\n";
+	int err = virtio_blk_write(7, 0, data);
+	if (err) {
+		kprintf_s("error\n");
+	}
 }
 
 void syscall(void)

@@ -3,9 +3,9 @@
 #include <kernel/alloc.h>
 #include <kernel/klib.h>
 #include <kernel/errno.h>
-#include <kernel/wchan.h>
 #include <kernel/plic-sifive.h>
 #include <kernel/sched.h>
+#include <kernel/wchan.h>
 
 virtio_blk_t virtio_blk_list[VIRTIO_MAX];
 
@@ -65,21 +65,22 @@ void virtio_blk_dev_init(size_t devnum)
 
 int virtio_blk_read(size_t devnum, u64 sector, void *data)
 {
+	int irqflags;
 	u8 status;
 	virtio_blk_t *dev = &virtio_blk_list[devnum];
 	virtio_blk_req_t *req;
 	u16 desc0, desc1, desc2;
 
-	spinlock_acquire(&dev->lock);
+	spinlock_acquire_irqsave(&dev->lock, irqflags);
 
 	if (sector >= dev->capacity) {
-		spinlock_release(&dev->lock);
+		spinlock_release_irqrestore(&dev->lock, irqflags);
 		return -EIO;
 	}
 
 	req = kmalloc(sizeof(*req));
 	if (!req) {
-		spinlock_release(&dev->lock);
+		spinlock_release_irqrestore(&dev->lock, irqflags);
 		return -ENOMEM;
 	}
 
@@ -123,11 +124,11 @@ int virtio_blk_read(size_t devnum, u64 sector, void *data)
 
 	/* wait for block op */
 	while (dev->waitop) {
-		spinlock_release(&dev->lock);	
+		spinlock_release_irqrestore(&dev->lock, irqflags);	
 
 		sched();
 
-		spinlock_acquire(&dev->lock);	
+		spinlock_acquire_irqsave(&dev->lock, irqflags);
 	}
 
 	/* save request status */
@@ -139,7 +140,7 @@ int virtio_blk_read(size_t devnum, u64 sector, void *data)
 
 	kfree(req);
 
-	spinlock_release(&dev->lock);
+	spinlock_release_irqrestore(&dev->lock, irqflags);
 
 	if (status != VIRTIO_BLK_S_OK) {
 		return -EIO;
@@ -150,21 +151,22 @@ int virtio_blk_read(size_t devnum, u64 sector, void *data)
 
 int virtio_blk_write(size_t devnum, u64 sector, void *data)
 {
+	int irqflags;
 	u8 status;
 	virtio_blk_t *dev = &virtio_blk_list[devnum];
 	virtio_blk_req_t *req;
 	u16 desc0, desc1, desc2;
 
-	spinlock_acquire(&dev->lock);
+	spinlock_acquire_irqsave(&dev->lock, irqflags);
 	
 	if (sector >= dev->capacity) {
-		spinlock_release(&dev->lock);
+		spinlock_release_irqrestore(&dev->lock, irqflags);
 		return -EIO;
 	}
 
 	req = kmalloc(sizeof(*req));
 	if (!req) {
-		spinlock_release(&dev->lock);
+		spinlock_release_irqrestore(&dev->lock, irqflags);
 		return -ENOMEM;
 	}
 
@@ -199,20 +201,11 @@ int virtio_blk_write(size_t devnum, u64 sector, void *data)
 		dev->requestq.avail->idx % dev->requestq.virtqsz] = desc0;
 	dev->requestq.avail->idx++;
 
-	/* set device wait flag */
-	dev->waitop = true;
-
 	/* notify device */
 	dev->base->virtio_mmio.queue_notify = VIRTIO_BLK_REQUESTQ;
 
-	/* wait for block op */
-	while (dev->waitop) {
-		spinlock_release(&dev->lock);	
-
-		sched();
-
-		spinlock_acquire(&dev->lock);	
-	}
+	/* wait for op completion */
+	wchan_sleep(dev, &dev->lock);
 
 	/* save request status */
 	status = req->status;
@@ -225,7 +218,7 @@ int virtio_blk_write(size_t devnum, u64 sector, void *data)
 	/* free request memory */
 	kfree(req);
 
-	spinlock_release(&dev->lock);
+	spinlock_release_irqrestore(&dev->lock, irqflags);
 
 	if (status != VIRTIO_BLK_S_OK) {
 		return -EIO;
@@ -236,13 +229,11 @@ int virtio_blk_write(size_t devnum, u64 sector, void *data)
 
 void virtio_blk_irq_handler(size_t devnum)
 {
+	int irqflags;
 	virtio_blk_t *dev = &virtio_blk_list[devnum];
 
-	spinlock_acquire(&dev->lock);
-
-	/* reset device wait flag */
-	dev->waitop = false;
-
-	spinlock_release(&dev->lock);
+	spinlock_acquire_irqsave(&dev->lock, irqflags);
+	wchan_signal(dev);
+	spinlock_release_irqrestore(&dev->lock, irqflags);
 }
 

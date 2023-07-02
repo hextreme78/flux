@@ -9,20 +9,22 @@ void mutex_init(mutex_t *mutex)
 
 void mutex_lock(mutex_t *mutex)
 {
-	spinlock_acquire_irqsave(&mutex->sl);
+	int irqflags;
+	spinlock_acquire_irqsave(&mutex->sl, irqflags);
 	while (mutex->lock) {
-		spinlock_release_irqsave(&mutex->sl);
+		spinlock_release_irqrestore(&mutex->sl, irqflags);
 		sched();
-		spinlock_acquire_irqsave(&mutex->sl);
+		spinlock_acquire_irqsave(&mutex->sl, irqflags);
 	}
 	mutex->lock = 1;
-	spinlock_release_irqsave(&mutex->sl);
+	spinlock_release_irqrestore(&mutex->sl, irqflags);
 }
 
 void mutex_unlock(mutex_t *mutex)
 {
-	spinlock_acquire_irqsave(&mutex->sl);
+	int irqflags;
+	spinlock_acquire_irqsave(&mutex->sl, irqflags);
 	mutex->lock = 0;
-	spinlock_release_irqsave(&mutex->sl);
+	spinlock_release_irqrestore(&mutex->sl, irqflags);
 }
 

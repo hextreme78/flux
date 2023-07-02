@@ -3,6 +3,8 @@
 
 #include <kernel/types.h>
 
+typedef struct list list_t;
+
 #define list_entry(ptr, type, field) \
 	((type *) ((u64) (ptr) - (u64) &((type *) 0)->field))
 
@@ -16,8 +18,6 @@
 	for ((pos) = list_next_entry(head, field); \
 			(pos) != (head); \
 			(pos) = list_next_entry(pos, field))
-
-typedef struct list list_t;
 
 struct list {
 	list_t *next, *prev;

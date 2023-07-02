@@ -27,7 +27,7 @@ __trampoline_userret:
 	sret
 
 .global __trampoline_usertrap
-.align 4
+.align RISCV64_ISR_ALIGN
 __trampoline_usertrap:
 	# save registers in trapframe
 	csrw sscratch, a0

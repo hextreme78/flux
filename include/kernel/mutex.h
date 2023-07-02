@@ -1,13 +1,16 @@
 #ifndef KERNEL_MUTEX_H
 #define KERNEL_MUTEX_H
 
-#include <kernel/spinlock.h>
 #include <kernel/types.h>
 
-typedef struct {
+typedef struct mutex mutex_t;
+
+#include <kernel/spinlock.h>
+
+struct mutex {
 	spinlock_t sl;
 	u64 lock;
-} mutex_t;
+};
 
 void mutex_init(mutex_t *mutex);
 void mutex_lock(mutex_t *mutex);

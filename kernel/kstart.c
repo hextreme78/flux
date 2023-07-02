@@ -3,7 +3,7 @@
 #include <kernel/clint-sifive.h>
 
 void kmain(void);
-__attribute__((aligned(16))) char kstack[KSTACKSIZE * NCPU];
+__attribute__((aligned(RISCV64_STACK_ALIGN))) char kstack[KSTACKSIZE * NCPU];
 
 void kstart(void)
 {

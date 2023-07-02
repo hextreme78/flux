@@ -3,11 +3,9 @@
 #include <kernel/proc.h>
 #include <kernel/spinlock.h>
 
-extern proc_t proctable[NPROC];
-void context_switch(ctx_t *old, ctx_t *new);
-
 void scheduler(void)
 {
+	extern proc_t proctable[NPROC];
 	irq_on();
 	while (1) {
 		for (size_t i = 0; i < NPROC; i++) {
@@ -24,7 +22,7 @@ void scheduler(void)
 	}
 }
 
-void context_switch_prepare(ctx_t *old, ctx_t *new)
+void context_switch_prepare(context_t *old, context_t *new)
 {
 	/* we will enter s-mode and interrupts will be disabled */
 	w_sstatus((r_sstatus() & ~SSTATUS_SPIE) | SSTATUS_SPP);
@@ -40,23 +38,17 @@ void context_switch_prepare(ctx_t *old, ctx_t *new)
 
 void sched(void)
 {
-	u64 irqsave = irq_enabled();
-	irq_off();
-
-	spinlock_acquire(&curproc()->lock);
+	int irqflags;
+	spinlock_acquire_irqsave(&curproc()->lock, irqflags);
 	curproc()->state = PROC_STATE_RUNNABLE;
 
 	context_switch(curproc()->context, curcpu()->context);
 
 	curproc()->state = PROC_STATE_RUNNING;	
-	spinlock_release(&curproc()->lock);
-
-	if (irqsave) {
-		irq_on();
-	}
+	spinlock_release_irqrestore(&curproc()->lock, irqflags);
 }
 
-void zombie(void)
+void sched_zombie(void)
 {
 	spinlock_acquire_irq(&curproc()->lock);
 	curproc()->state = PROC_STATE_ZOMBIE;
