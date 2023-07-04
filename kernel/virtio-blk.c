@@ -14,6 +14,7 @@ void virtio_blk_init(void)
 	for (size_t i = 0; i < VIRTIO_MAX; i++) {
 		virtio_blk_list[i].isvalid = false;
 		spinlock_init(&virtio_blk_list[i].lock);
+		mutex_init(&virtio_blk_list[i].oplock);
 	}
 }
 
@@ -24,7 +25,7 @@ void virtio_blk_dev_init(size_t devnum)
 
 	/* set mmio base */
 	dev->base = (virtio_blk_mmio_t *) VIRTIO_MMIO_BASE(devnum);
-	
+
 	/* set the driver status bit */
 	dev->base->virtio_mmio.status |= VIRTIO_STATUS_DRIVER;
 
@@ -71,16 +72,19 @@ int virtio_blk_read(size_t devnum, u64 sector, void *data)
 	virtio_blk_req_t *req;
 	u16 desc0, desc1, desc2;
 
+	mutex_lock(&dev->oplock);
 	spinlock_acquire_irqsave(&dev->lock, irqflags);
 
 	if (sector >= dev->capacity) {
 		spinlock_release_irqrestore(&dev->lock, irqflags);
+		mutex_unlock(&dev->oplock);
 		return -EIO;
 	}
 
 	req = kmalloc(sizeof(*req));
 	if (!req) {
 		spinlock_release_irqrestore(&dev->lock, irqflags);
+		mutex_unlock(&dev->oplock);
 		return -ENOMEM;
 	}
 
@@ -132,6 +136,7 @@ int virtio_blk_read(size_t devnum, u64 sector, void *data)
 	kfree(req);
 
 	spinlock_release_irqrestore(&dev->lock, irqflags);
+	mutex_unlock(&dev->oplock);
 
 	if (status != VIRTIO_BLK_S_OK) {
 		return -EIO;
@@ -148,16 +153,19 @@ int virtio_blk_write(size_t devnum, u64 sector, void *data)
 	virtio_blk_req_t *req;
 	u16 desc0, desc1, desc2;
 
+	mutex_lock(&dev->oplock);
 	spinlock_acquire_irqsave(&dev->lock, irqflags);
-	
+
 	if (sector >= dev->capacity) {
 		spinlock_release_irqrestore(&dev->lock, irqflags);
+		mutex_unlock(&dev->oplock);
 		return -EIO;
 	}
 
 	req = kmalloc(sizeof(*req));
 	if (!req) {
 		spinlock_release_irqrestore(&dev->lock, irqflags);
+		mutex_unlock(&dev->oplock);
 		return -ENOMEM;
 	}
 
@@ -205,11 +213,12 @@ int virtio_blk_write(size_t devnum, u64 sector, void *data)
 	virtq_desc_free(&dev->requestq, desc0);
 	virtq_desc_free(&dev->requestq, desc1);
 	virtq_desc_free(&dev->requestq, desc2);
-	
+
 	/* free request memory */
 	kfree(req);
 
 	spinlock_release_irqrestore(&dev->lock, irqflags);
+	mutex_unlock(&dev->oplock);
 
 	if (status != VIRTIO_BLK_S_OK) {
 		return -EIO;

@@ -149,7 +149,7 @@ struct virtq {
 
 #define VIRTQ_USED_F_NO_NOTIFY 1
 
-#define VIRTQ_ERROR -1
+#define VIRTQ_ERROR ((u16) -1)
 
 void virtio_init(void);
 int virtq_init(virtio_mmio_t *base, virtq_t *virtq, u32 queue_sel);

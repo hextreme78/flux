@@ -4,6 +4,7 @@
 #include <kernel/types.h>
 #include <kernel/virtio.h>
 #include <kernel/spinlock.h>
+#include <kernel/mutex.h>
 
 typedef volatile struct virtio_blk_mmio virtio_blk_mmio_t;
 typedef struct virtio_blk               virtio_blk_t;
@@ -48,6 +49,7 @@ struct virtio_blk {
 	virtq_t requestq;
 	virtio_blk_mmio_t *base;
 	spinlock_t lock;
+	mutex_t oplock;
 	bool isvalid;
 };
 

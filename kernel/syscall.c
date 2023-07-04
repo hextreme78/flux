@@ -6,27 +6,25 @@
 
 void debug_printint(i64 a0)
 {
-	kprintf("debug_printint %d\n", a0);
+	kprintf_s("debug_printint %d\n", a0);
 
-	char data[512] = "hello, world!!!\n";
-	int err = virtio_blk_write(7, 0, data);
-	if (err) {
-		kprintf_s("error\n");
-	}
+	char data[512] = "qwerty123\n";
+	virtio_blk_write(7, 0, data);
+	virtio_blk_write(7, 1, data);
 }
 
 void syscall(void)
 {
 	u64 ret = 0;
-	u64 callnum;
+	u64 sysnum;
 	trapframe_t *tf;
 
 	tf = curproc()->trapframe;
 
 	/* get syscall number from a7 register */
-	callnum = tf->a7;
+	sysnum = tf->a7;
 
-	switch (callnum) {
+	switch (sysnum) {
 	case SYS_DEBUG_PRINTINT:
 		debug_printint(tf->a0);
 		break;
@@ -60,7 +58,7 @@ void syscall(void)
 		break;
 
 	default:
-		kprintf_s("unknown syscall %u\n", callnum);
+		kprintf_s("unknown syscall %u\n", sysnum);
 	}
 
 	/* return result in a0 register */
