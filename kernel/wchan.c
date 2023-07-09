@@ -16,8 +16,8 @@ void wchan_sleep(void *wchan, spinlock_t *sl)
 	curproc()->state = PROC_STATE_RUNNING;
 	curproc()->wchan = NULL;
 
-	spinlock_acquire(sl);
 	spinlock_release_irqrestore(&curproc()->lock, irqflags);
+	spinlock_acquire(sl);
 }
 
 void wchan_signal(void *wchan)

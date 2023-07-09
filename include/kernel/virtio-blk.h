@@ -4,7 +4,6 @@
 #include <kernel/types.h>
 #include <kernel/virtio.h>
 #include <kernel/spinlock.h>
-#include <kernel/mutex.h>
 
 typedef volatile struct virtio_blk_mmio virtio_blk_mmio_t;
 typedef struct virtio_blk               virtio_blk_t;
@@ -49,7 +48,6 @@ struct virtio_blk {
 	virtq_t requestq;
 	virtio_blk_mmio_t *base;
 	spinlock_t lock;
-	mutex_t oplock;
 	bool isvalid;
 };
 
@@ -58,7 +56,7 @@ struct virtio_blk_req {
 	u32 type;
 	u32 unused0;
 	u64 sector;
-	
+
 	/* data */
 	u8 data[0];
 
@@ -83,7 +81,7 @@ struct virtio_blk_req {
 /* blk queues */
 #define VIRTIO_BLK_REQUESTQ 0
 
-#define VIRTIO_BLK_SIZE 512
+#define VIRTIO_BLK_SECTOR_SIZE 512
 
 /* type of request */
 #define VIRTIO_BLK_T_IN           0
@@ -96,7 +94,7 @@ struct virtio_blk_req {
 #define VIRTIO_BLK_REQ_HEAD_SIZE 16
 
 /* data field */
-#define VIRTIO_BLK_REQ_DATA_SIZE VIRTIO_BLK_SIZE
+#define VIRTIO_BLK_REQ_DATA_SIZE VIRTIO_BLK_SECTOR_SIZE
 
 /* status field */
 #define VIRTIO_BLK_REQ_TAIL_SIZE 1

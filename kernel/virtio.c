@@ -4,6 +4,7 @@
 #include <kernel/alloc.h>
 #include <kernel/klib.h>
 #include <kernel/errno.h>
+#include <kernel/wchan.h>
 
 void virtio_init(void)
 {
@@ -67,6 +68,9 @@ int virtq_init(virtio_mmio_t *base, virtq_t *virtq, u32 queue_sel)
 	if (!virtq->virtqsz) {
 		return -ENODEV;
 	}
+
+	/* set lastusedidx to 0 */
+	virtq->lastusedidx = 0;
 
 	/* descriptor alloc table */
 	virtq->descmap = kmalloc(sizeof(*virtq->descmap) * virtq->virtqsz);
@@ -144,8 +148,18 @@ u16 virtq_desc_alloc(virtq_t *virtq)
 	return VIRTQ_ERROR;
 }
 
+u16 virtq_desc_alloc_nofail(virtq_t *virtq, spinlock_t *lock)
+{
+	u16 desc;
+	while ((desc = virtq_desc_alloc(virtq)) == VIRTQ_ERROR) {
+		wchan_sleep(virtq->desc, lock);
+	}
+	return desc;
+}
+
 void virtq_desc_free(virtq_t *virtq, u16 desc)
 {
 	virtq->descmap[desc] = 0;
+	wchan_signal(virtq->desc);
 }
 

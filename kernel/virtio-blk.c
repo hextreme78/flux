@@ -14,7 +14,6 @@ void virtio_blk_init(void)
 	for (size_t i = 0; i < VIRTIO_MAX; i++) {
 		virtio_blk_list[i].isvalid = false;
 		spinlock_init(&virtio_blk_list[i].lock);
-		mutex_init(&virtio_blk_list[i].oplock);
 	}
 }
 
@@ -72,19 +71,16 @@ int virtio_blk_read(size_t devnum, u64 sector, void *data)
 	virtio_blk_req_t *req;
 	u16 desc0, desc1, desc2;
 
-	mutex_lock(&dev->oplock);
 	spinlock_acquire_irqsave(&dev->lock, irqflags);
 
 	if (sector >= dev->capacity) {
 		spinlock_release_irqrestore(&dev->lock, irqflags);
-		mutex_unlock(&dev->oplock);
 		return -EIO;
 	}
 
 	req = kmalloc(sizeof(*req));
 	if (!req) {
 		spinlock_release_irqrestore(&dev->lock, irqflags);
-		mutex_unlock(&dev->oplock);
 		return -ENOMEM;
 	}
 
@@ -136,7 +132,6 @@ int virtio_blk_read(size_t devnum, u64 sector, void *data)
 	kfree(req);
 
 	spinlock_release_irqrestore(&dev->lock, irqflags);
-	mutex_unlock(&dev->oplock);
 
 	if (status != VIRTIO_BLK_S_OK) {
 		return -EIO;
@@ -153,19 +148,16 @@ int virtio_blk_write(size_t devnum, u64 sector, void *data)
 	virtio_blk_req_t *req;
 	u16 desc0, desc1, desc2;
 
-	mutex_lock(&dev->oplock);
 	spinlock_acquire_irqsave(&dev->lock, irqflags);
 
 	if (sector >= dev->capacity) {
 		spinlock_release_irqrestore(&dev->lock, irqflags);
-		mutex_unlock(&dev->oplock);
 		return -EIO;
 	}
 
 	req = kmalloc(sizeof(*req));
 	if (!req) {
 		spinlock_release_irqrestore(&dev->lock, irqflags);
-		mutex_unlock(&dev->oplock);
 		return -ENOMEM;
 	}
 
@@ -173,19 +165,19 @@ int virtio_blk_write(size_t devnum, u64 sector, void *data)
 	req->sector = sector;
 
 	/* header descriptor */
-	desc0 = virtq_desc_alloc(&dev->requestq);
+	desc0 = virtq_desc_alloc_nofail(&dev->requestq, &dev->lock);
 	dev->requestq.desc[desc0].addr = (u64) req;
 	dev->requestq.desc[desc0].len = VIRTIO_BLK_REQ_HEAD_SIZE;
 	dev->requestq.desc[desc0].flags = VIRTQ_DESC_F_NEXT;
 
 	/* data descriptor */
-	desc1 = virtq_desc_alloc(&dev->requestq);
+	desc1 = virtq_desc_alloc_nofail(&dev->requestq, &dev->lock);
 	dev->requestq.desc[desc1].addr = (u64) data;
 	dev->requestq.desc[desc1].len = VIRTIO_BLK_REQ_DATA_SIZE;
 	dev->requestq.desc[desc1].flags = VIRTQ_DESC_F_NEXT;
 
 	/* tail descriptor */
-	desc2 = virtq_desc_alloc(&dev->requestq);
+	desc2 = virtq_desc_alloc_nofail(&dev->requestq, &dev->lock);
 	dev->requestq.desc[desc2].addr = (u64) &req->status;
 	dev->requestq.desc[desc2].len = VIRTIO_BLK_REQ_TAIL_SIZE;
 	dev->requestq.desc[desc2].flags = VIRTQ_DESC_F_WRITE;
@@ -204,7 +196,7 @@ int virtio_blk_write(size_t devnum, u64 sector, void *data)
 	dev->base->virtio_mmio.queue_notify = VIRTIO_BLK_REQUESTQ;
 
 	/* wait for block op */
-	wchan_sleep(dev, &dev->lock);
+	wchan_sleep(req, &dev->lock);
 
 	/* save request status */
 	status = req->status;
@@ -218,7 +210,6 @@ int virtio_blk_write(size_t devnum, u64 sector, void *data)
 	kfree(req);
 
 	spinlock_release_irqrestore(&dev->lock, irqflags);
-	mutex_unlock(&dev->oplock);
 
 	if (status != VIRTIO_BLK_S_OK) {
 		return -EIO;
@@ -230,10 +221,24 @@ int virtio_blk_write(size_t devnum, u64 sector, void *data)
 void virtio_blk_irq_handler(size_t devnum)
 {
 	int irqflags;
+	u16 i;
 	virtio_blk_t *dev = &virtio_blk_list[devnum];
+	virtq_used_elem_t *used;
+	virtq_desc_t *desc;
+	virtio_blk_req_t *req;
 
 	spinlock_acquire_irqsave(&dev->lock, irqflags);
-	wchan_signal(dev);
+
+	for (i = dev->requestq.lastusedidx % dev->requestq.virtqsz;
+			i != dev->requestq.used->idx % dev->requestq.virtqsz;
+			i = (i + 1) % dev->requestq.virtqsz) {
+		used = &dev->requestq.used->ring[i];
+		desc = &dev->requestq.desc[used->id];
+		req = (void *) desc->addr;
+		wchan_signal(req);
+	}
+	dev->requestq.lastusedidx = dev->requestq.used->idx;
+
 	spinlock_release_irqrestore(&dev->lock, irqflags);
 }
 
