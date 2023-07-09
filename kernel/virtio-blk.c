@@ -89,19 +89,19 @@ int virtio_blk_read(size_t devnum, u64 sector, void *data)
 	req->status = 0xff;
 
 	/* header descriptor */
-	desc0 = virtq_desc_alloc(&dev->requestq);
+	desc0 = virtq_desc_alloc_nofail(&dev->requestq, &dev->lock);
 	dev->requestq.desc[desc0].addr = (u64) req;
 	dev->requestq.desc[desc0].len = VIRTIO_BLK_REQ_HEAD_SIZE;
 	dev->requestq.desc[desc0].flags = VIRTQ_DESC_F_NEXT;
 
 	/* data descriptor */
-	desc1 = virtq_desc_alloc(&dev->requestq);
+	desc1 = virtq_desc_alloc_nofail(&dev->requestq, &dev->lock);
 	dev->requestq.desc[desc1].addr = (u64) data;
 	dev->requestq.desc[desc1].len = VIRTIO_BLK_REQ_DATA_SIZE;
 	dev->requestq.desc[desc1].flags = VIRTQ_DESC_F_NEXT | VIRTQ_DESC_F_WRITE;
 
 	/* tail descriptor */
-	desc2 = virtq_desc_alloc(&dev->requestq);
+	desc2 = virtq_desc_alloc_nofail(&dev->requestq, &dev->lock);
 	dev->requestq.desc[desc2].addr = (u64) &req->status;
 	dev->requestq.desc[desc2].len = VIRTIO_BLK_REQ_TAIL_SIZE;
 	dev->requestq.desc[desc2].flags = VIRTQ_DESC_F_WRITE;
