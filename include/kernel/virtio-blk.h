@@ -49,6 +49,7 @@ struct virtio_blk {
 	virtio_blk_mmio_t *base;
 	spinlock_t lock;
 	bool isvalid;
+	bool waitop;
 };
 
 struct virtio_blk_req {
@@ -110,6 +111,8 @@ int virtio_blk_read(size_t devnum, u64 sector, void *data);
 int virtio_blk_write(size_t devnum, u64 sector, void *data);
 
 void virtio_blk_irq_handler(size_t devnum);
+
+int virtio_blk_read_nosleep(size_t devnum, u64 sector, void *data);
 
 #endif
 

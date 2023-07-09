@@ -159,8 +159,9 @@ void virtio_init(void);
 int virtq_init(virtio_mmio_t *base, virtq_t *virtq, u32 queue_sel);
 void virtq_destroy(virtq_t *virtq);
 u16 virtq_desc_alloc(virtq_t *virtq);
-u16 virtq_desc_alloc_nofail(virtq_t *virtq, spinlock_t *lock);
 void virtq_desc_free(virtq_t *virtq, u16 desc);
+u16 virtq_desc_alloc_nofail(virtq_t *virtq, spinlock_t *lock);
+void virtq_desc_free_nofail(virtq_t *virtq, u16 desc);
 
 void virtio_irq_handler(size_t devnum);
 

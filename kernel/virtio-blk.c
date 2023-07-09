@@ -86,7 +86,6 @@ int virtio_blk_read(size_t devnum, u64 sector, void *data)
 
 	req->type = VIRTIO_BLK_T_IN;
 	req->sector = sector;
-	req->status = 0xff;
 
 	/* header descriptor */
 	desc0 = virtq_desc_alloc_nofail(&dev->requestq, &dev->lock);
@@ -125,9 +124,9 @@ int virtio_blk_read(size_t devnum, u64 sector, void *data)
 	/* save request status */
 	status = req->status;
 
-	virtq_desc_free(&dev->requestq, desc0);
-	virtq_desc_free(&dev->requestq, desc1);
-	virtq_desc_free(&dev->requestq, desc2);
+	virtq_desc_free_nofail(&dev->requestq, desc0);
+	virtq_desc_free_nofail(&dev->requestq, desc1);
+	virtq_desc_free_nofail(&dev->requestq, desc2);
 
 	kfree(req);
 
@@ -202,9 +201,9 @@ int virtio_blk_write(size_t devnum, u64 sector, void *data)
 	status = req->status;
 
 	/* free all descriptors */
-	virtq_desc_free(&dev->requestq, desc0);
-	virtq_desc_free(&dev->requestq, desc1);
-	virtq_desc_free(&dev->requestq, desc2);
+	virtq_desc_free_nofail(&dev->requestq, desc0);
+	virtq_desc_free_nofail(&dev->requestq, desc1);
+	virtq_desc_free_nofail(&dev->requestq, desc2);
 
 	/* free request memory */
 	kfree(req);
@@ -229,6 +228,7 @@ void virtio_blk_irq_handler(size_t devnum)
 
 	spinlock_acquire_irqsave(&dev->lock, irqflags);
 
+	/* if block op is completed we will wakeup blocked procs */
 	for (i = dev->requestq.lastusedidx % dev->requestq.virtqsz;
 			i != dev->requestq.used->idx % dev->requestq.virtqsz;
 			i = (i + 1) % dev->requestq.virtqsz) {
@@ -239,6 +239,97 @@ void virtio_blk_irq_handler(size_t devnum)
 	}
 	dev->requestq.lastusedidx = dev->requestq.used->idx;
 
+	/* for virtio_blk_read_nosleep */
+	dev->waitop = false;
+
 	spinlock_release_irqrestore(&dev->lock, irqflags);
+}
+
+/* For fs layer init only.
+ * Concurrency is not allowed.
+ */
+int virtio_blk_read_nosleep(size_t devnum, u64 sector, void *data)
+{
+	int irqflags;
+	u8 status;
+	virtio_blk_t *dev = &virtio_blk_list[devnum];
+	virtio_blk_req_t *req;
+	u16 desc0, desc1, desc2;
+
+	spinlock_acquire_irqsave(&dev->lock, irqflags);
+
+	if (sector >= dev->capacity) {
+		spinlock_release_irqrestore(&dev->lock, irqflags);
+		return -EIO;
+	}
+
+	req = kmalloc(sizeof(*req));
+	if (!req) {
+		spinlock_release_irqrestore(&dev->lock, irqflags);
+		return -ENOMEM;
+	}
+
+	req->type = VIRTIO_BLK_T_IN;
+	req->sector = sector;
+
+	/* header descriptor */
+	desc0 = virtq_desc_alloc(&dev->requestq);
+	dev->requestq.desc[desc0].addr = (u64) req;
+	dev->requestq.desc[desc0].len = VIRTIO_BLK_REQ_HEAD_SIZE;
+	dev->requestq.desc[desc0].flags = VIRTQ_DESC_F_NEXT;
+
+	/* data descriptor */
+	desc1 = virtq_desc_alloc(&dev->requestq);
+	dev->requestq.desc[desc1].addr = (u64) data;
+	dev->requestq.desc[desc1].len = VIRTIO_BLK_REQ_DATA_SIZE;
+	dev->requestq.desc[desc1].flags = VIRTQ_DESC_F_NEXT | VIRTQ_DESC_F_WRITE;
+
+	/* tail descriptor */
+	desc2 = virtq_desc_alloc(&dev->requestq);
+	dev->requestq.desc[desc2].addr = (u64) &req->status;
+	dev->requestq.desc[desc2].len = VIRTIO_BLK_REQ_TAIL_SIZE;
+	dev->requestq.desc[desc2].flags = VIRTQ_DESC_F_WRITE;
+
+	/* link all descriptors */
+	dev->requestq.desc[desc0].next = desc1;
+	dev->requestq.desc[desc1].next = desc2;
+	dev->requestq.desc[desc2].next = 0;
+
+	/* add request to avail ring and increment idx */
+	dev->requestq.avail->ring[
+		dev->requestq.avail->idx % dev->requestq.virtqsz] = desc0;
+	dev->requestq.avail->idx++;
+
+	/* notify device */
+	dev->base->virtio_mmio.queue_notify = VIRTIO_BLK_REQUESTQ;
+
+	/* set waitop flag */
+	dev->waitop = true;
+
+	/* wait for block op */
+	while (dev->waitop) {
+		spinlock_release_irq(&dev->lock);
+
+		wfi();
+
+		spinlock_acquire_irq(&dev->lock);
+	}
+
+	/* save request status */
+	status = req->status;
+
+	virtq_desc_free(&dev->requestq, desc0);
+	virtq_desc_free(&dev->requestq, desc1);
+	virtq_desc_free(&dev->requestq, desc2);
+
+	kfree(req);
+
+	spinlock_release_irqrestore(&dev->lock, irqflags);
+
+	if (status != VIRTIO_BLK_S_OK) {
+		return -EIO;
+	}
+
+	return 0;
 }
 

@@ -8,6 +8,7 @@
 #include <kernel/vm.h>
 #include <kernel/proc.h>
 #include <kernel/virtio.h>
+#include <kernel/ext2.h>
 
 static u64 cpu0_init = 0;
 
@@ -41,6 +42,7 @@ void kmain(void)
 		proc_init();
 		proc_hart_init();
 		virtio_init();
+		ext2_init();
 
 		/* process testing function */
 		__proc_test__();

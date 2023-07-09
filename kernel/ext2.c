@@ -10,13 +10,13 @@ int ext2_superblock_read(ext2_blkdev_t *blkdev)
 {
 	int err;
 	/* read superblock sectors */
-	err = virtio_blk_read(blkdev->virtio_devnum,
+	err = virtio_blk_read_nosleep(blkdev->virtio_devnum,
 			EXT2_SUPERBLOCK_SECTOR0,
 			&blkdev->superblock);
 	if (err) {
 		return err;
 	}
-	err = virtio_blk_read(blkdev->virtio_devnum,
+	err = virtio_blk_read_nosleep(blkdev->virtio_devnum,
 			EXT2_SUPERBLOCK_SECTOR1,
 			(u8 *) &blkdev->superblock + VIRTIO_BLK_SECTOR_SIZE);
 	if (err) {
@@ -50,6 +50,7 @@ void ext2_init(void)
 				continue;
 			}
 
+			/* save fs block size */
 			blkdev->blksz = 1024 << blkdev->superblock.s_log_block_size;
 
 			list_add(&blkdev->devlist, &ext2_dev_list.devlist);

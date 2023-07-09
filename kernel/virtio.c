@@ -148,6 +148,11 @@ u16 virtq_desc_alloc(virtq_t *virtq)
 	return VIRTQ_ERROR;
 }
 
+void virtq_desc_free(virtq_t *virtq, u16 desc)
+{
+	virtq->descmap[desc] = 0;
+}
+
 u16 virtq_desc_alloc_nofail(virtq_t *virtq, spinlock_t *lock)
 {
 	u16 desc;
@@ -157,9 +162,9 @@ u16 virtq_desc_alloc_nofail(virtq_t *virtq, spinlock_t *lock)
 	return desc;
 }
 
-void virtq_desc_free(virtq_t *virtq, u16 desc)
+void virtq_desc_free_nofail(virtq_t *virtq, u16 desc)
 {
-	virtq->descmap[desc] = 0;
+	virtq_desc_free(virtq, desc);
 	wchan_signal(virtq->desc);
 }
 
