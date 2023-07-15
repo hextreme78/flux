@@ -119,7 +119,7 @@ int virtio_blk_read(size_t devnum, u64 sector, void *data)
 	dev->base->virtio_mmio.queue_notify = VIRTIO_BLK_REQUESTQ;
 
 	/* wait for block op */
-	wchan_sleep(dev, &dev->lock);
+	wchan_sleep(req, &dev->lock);
 
 	/* save request status */
 	status = req->status;

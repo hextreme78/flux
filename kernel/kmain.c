@@ -24,7 +24,7 @@ void __proc_test__(void)
 	size_t elf2sz = (u64) &elfbin_end - (u64) elfbin_test2;
 
 	proc_create(elf1, elf1sz);
-	proc_create(elf2, elf2sz);
+	//proc_create(elf2, elf2sz);
 }
 
 void kmain(void)

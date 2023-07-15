@@ -3,7 +3,7 @@ PLATFORM = virt
 TOOLCHAIN_PREFIX = riscv64-unknown-linux-gnu
 TARGET = kernel-$(ARCH)-$(PLATFORM)
 
-QEMU_SMP = 8
+QEMU_SMP = 1
 QEMU_MEM = 256M
 
 CC = $(TOOLCHAIN_PREFIX)-gcc

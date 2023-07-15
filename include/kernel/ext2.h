@@ -4,14 +4,23 @@
 #include <kernel/types.h>
 
 typedef struct ext2_superblock ext2_superblock_t;
+typedef struct ext2_blockgroup_descriptor ext2_blockgroup_descriptor_t;
+typedef struct ext2_inode ext2_inode_t;
 typedef struct ext2_blkdev ext2_blkdev_t;
 
 #include <kernel/list.h>
 
-#define EXT2_SUPERBLOCK_SECTOR0 2
-#define EXT2_SUPERBLOCK_SECTOR1 3
+#define EXT2_SUPERBLOCK_START 1024
 
 #define EXT2_SUPER_MAGIC 0xef53
+
+#define EXT2_BLOCKGROUP_DESCRIPTOR_TABLE_START 2048
+
+#define EXT2_GOOD_OLD_REV 0
+#define EXT2_DYNAMIC_REV  1
+
+/* for good old revision */
+#define EXT2_INODE_SIZE 128
 
 struct ext2_superblock {
 	u32 s_inodes_count;
@@ -71,21 +80,71 @@ struct ext2_superblock {
 	/* -- Other options -- */
 	u32 s_default_mount_options;
 	u32 s_first_meta_bg;
-	u8 unused2[760];
 
+	u8 unused2[248];
+
+	/* we will not read sector 1 */
+	/* u8 unused3[512]; */
+} __attribute__((packed));
+
+struct ext2_blockgroup_descriptor {
+	u32 bg_block_bitmap;
+	u32 bg_inode_bitmap;
+	u32 bg_inode_table;
+	u16 bg_free_blocks_count;
+	u16 bg_free_inodes_count;
+	u16 bg_used_dirs_count;
+	u16 bg_pad;
+	u8 bg_reserved[12];
+} __attribute__((packed));
+
+struct ext2_inode {
+	u16 i_mode;
+	u16 i_uid;
+	u32 i_size;
+	u32 i_atime;
+	u32 i_ctime;
+	u32 i_mtime;
+	u32 i_dtime;
+	u16 i_gid;
+	u16 i_links_count;
+	u32 i_blocks;
+	u32 i_flags;
+	u32 i_osd1;
+	u32 i_block[15];
+	u32 i_generation;
+	u32 i_file_acl;
+	u32 i_dir_acl;
+	u32 i_faddr;
+	u8 i_osd2[12];
 } __attribute__((packed));
 
 struct ext2_blkdev {
 	size_t virtio_devnum;
 
-	ext2_superblock_t superblock;
+	u64 block_size;
+	u32 inodes_count;
+	u32 blocks_count;
+	u32 blocks_per_group;
+	u32 inodes_per_group;
 
-	u64 blksz;
+	u32 blockgroups_count;
+
+	u32 rev_level;
+
+	u16 inode_size;
 
 	list_t devlist;
 };
 
 void ext2_init(void);
+
+int ext2_blk_read(ext2_blkdev_t *dev, u64 blknum, void *buf);
+int ext2_blk_write(ext2_blkdev_t *dev, u64 blknum, void *buf);
+int ext2_nbytes_read(ext2_blkdev_t *dev, void *buf, u64 len, u64 offset);
+int ext2_nbytes_write(ext2_blkdev_t *dev, void *buf, u64 len, u64 offset);
+int ext2_inode_read(ext2_blkdev_t *dev, u32 inum, ext2_inode_t *inode);
+int ext2_inode_write(ext2_blkdev_t *dev, u32 inum, ext2_inode_t *inode);
 
 #endif
 

@@ -4,14 +4,17 @@
 #include <kernel/kprintf.h>
 #include <kernel/sysproc.h>
 
+#include <kernel/ext2.h>
+
 void debug_printint(i64 a0)
 {
 	kprintf_s("debug_printint %d\n", a0);
-	
-	/*
-	char data[512] = "qwerty3210\n";
-	virtio_blk_write(7, 0, data);
-	*/
+
+	extern ext2_blkdev_t ext2_dev_list;
+	ext2_inode_t inode;
+	ext2_inode_read(list_next_entry(&ext2_dev_list, devlist), 2, &inode);
+
+	kprintf_s("i_osd1 %d\n", inode.i_ctime);
 }
 
 void syscall(void)
