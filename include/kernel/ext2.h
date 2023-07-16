@@ -8,6 +8,7 @@ typedef struct ext2_blockgroup_descriptor ext2_blockgroup_descriptor_t;
 typedef struct ext2_inode ext2_inode_t;
 typedef struct ext2_blkdev ext2_blkdev_t;
 
+#include <kernel/spinlock.h>
 #include <kernel/list.h>
 
 #define EXT2_SUPERBLOCK_START 1024
@@ -18,6 +19,8 @@ typedef struct ext2_blkdev ext2_blkdev_t;
 
 #define EXT2_GOOD_OLD_REV 0
 #define EXT2_DYNAMIC_REV  1
+
+#define EXT2_ROOT_INODE 2
 
 /* for good old revision */
 #define EXT2_INODE_SIZE 128
@@ -120,6 +123,8 @@ struct ext2_inode {
 } __attribute__((packed));
 
 struct ext2_blkdev {
+	spinlock_t lock;
+
 	size_t virtio_devnum;
 
 	u64 block_size;
@@ -139,8 +144,8 @@ struct ext2_blkdev {
 
 void ext2_init(void);
 
-int ext2_blk_read(ext2_blkdev_t *dev, u64 blknum, void *buf);
-int ext2_blk_write(ext2_blkdev_t *dev, u64 blknum, void *buf);
+int ext2_block_read(ext2_blkdev_t *dev, u64 blknum, void *buf);
+int ext2_block_write(ext2_blkdev_t *dev, u64 blknum, void *buf);
 int ext2_nbytes_read(ext2_blkdev_t *dev, void *buf, u64 len, u64 offset);
 int ext2_nbytes_write(ext2_blkdev_t *dev, void *buf, u64 len, u64 offset);
 int ext2_inode_read(ext2_blkdev_t *dev, u32 inum, ext2_inode_t *inode);
