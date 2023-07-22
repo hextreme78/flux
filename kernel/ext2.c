@@ -194,56 +194,14 @@ int ext2_superblock_read(ext2_blkdev_t *dev, ext2_superblock_t *superblock)
 	return 0;
 }
 
-int ext2_superblock_write_all_copies(ext2_blkdev_t *dev, ext2_superblock_t *superblock)
+int ext2_superblock_write(ext2_blkdev_t *dev, ext2_superblock_t *superblock)
 {
 	int err;
 
-	/* update 0 copy */
 	err = ext2_nbytes_write(dev, superblock, sizeof(*superblock),
 			EXT2_SUPERBLOCK_START);
 	if (err) {
 		return err;
-	}
-
-	/* update 1 copy */
-	if (dev->blockgroups_count > 0) {
-		return 0;
-	}
-	err = ext2_nbytes_write(dev, superblock, sizeof(*superblock),
-			EXT2_SUPERBLOCK_START +
-			dev->blocks_per_group);
-	if (err) {
-		return err;
-	}
-
-	/* power of 3 */
-	for (size_t i = 3; i < dev->blockgroups_count; i *= 3) {
-		err = ext2_nbytes_write(dev, superblock, sizeof(*superblock),
-			EXT2_SUPERBLOCK_START +
-			dev->blocks_per_group * i);
-		if (err) {
-			return err;
-		}
-	}
-
-	/* power of 5 */
-	for (size_t i = 5; i < dev->blockgroups_count; i *= 5) {
-		err = ext2_nbytes_write(dev, superblock, sizeof(*superblock),
-			EXT2_SUPERBLOCK_START +
-			dev->blocks_per_group * i);
-		if (err) {
-			return err;
-		}
-	}
-
-	/* power of 7 */
-	for (size_t i = 7; i < dev->blockgroups_count; i *= 7) {
-		err = ext2_nbytes_write(dev, superblock, sizeof(*superblock),
-			EXT2_SUPERBLOCK_START +
-			dev->blocks_per_group * i);
-		if (err) {
-			return err;
-		}
 	}
 
 	return 0;
@@ -264,62 +222,16 @@ int ext2_blockgroup_descriptor_read(ext2_blkdev_t *dev, u32 bgnum,
 	return 0;
 }
 
-int ext2_blockgroup_descriptor_write_all_copies(ext2_blkdev_t *dev, u32 bgnum,
+int ext2_blockgroup_descriptor_write(ext2_blkdev_t *dev, u32 bgnum,
 		ext2_blockgroup_descriptor_t *bgdesc)
 {
 	int err;
 
-	/* update 0 copy */
 	err = ext2_nbytes_write(dev, bgdesc, sizeof(*bgdesc),
 			EXT2_BLOCKGROUP_DESCRIPTOR_TABLE_START +
 			bgnum * sizeof(*bgdesc));
 	if (err) {
 		return err;
-	}
-
-	/* update 1 copy */
-	if (dev->blockgroups_count > 0) {
-		return 0;
-	}
-	err = ext2_nbytes_write(dev, bgdesc, sizeof(*bgdesc),
-			EXT2_BLOCKGROUP_DESCRIPTOR_TABLE_START +
-			bgnum * sizeof(*bgdesc) +
-			dev->blocks_per_group);
-	if (err) {
-		return err;
-	}
-
-	/* power of 3 */
-	for (size_t i = 3; i < dev->blockgroups_count; i *= 3) {
-		err = ext2_nbytes_write(dev, bgdesc, sizeof(*bgdesc),
-			EXT2_BLOCKGROUP_DESCRIPTOR_TABLE_START +
-			bgnum * sizeof(*bgdesc) +
-			dev->blocks_per_group * i);
-		if (err) {
-			return err;
-		}
-	}
-
-	/* power of 5 */
-	for (size_t i = 5; i < dev->blockgroups_count; i *= 5) {
-		err = ext2_nbytes_write(dev, bgdesc, sizeof(*bgdesc),
-			EXT2_BLOCKGROUP_DESCRIPTOR_TABLE_START +
-			bgnum * sizeof(*bgdesc) +
-			dev->blocks_per_group * i);
-		if (err) {
-			return err;
-		}
-	}
-
-	/* power of 7 */
-	for (size_t i = 7; i < dev->blockgroups_count; i *= 7) {
-		err = ext2_nbytes_write(dev, bgdesc, sizeof(*bgdesc),
-			EXT2_BLOCKGROUP_DESCRIPTOR_TABLE_START +
-			bgnum * sizeof(*bgdesc) +
-			dev->blocks_per_group * i);
-		if (err) {
-			return err;
-		}
 	}
 
 	return 0;
@@ -376,24 +288,22 @@ int ext2_inode_counter_increment(ext2_blkdev_t *dev, u32 inum)
 	ext2_blockgroup_descriptor_t bgdesc;
 	ext2_superblock_t superblock;
 
-	/* update all blockgroup copies */
 	err = ext2_blockgroup_descriptor_read(dev, bgnum, &bgdesc);
 	if (err) {
 		return err;
 	}
 	bgdesc.bg_free_inodes_count++;
-	err = ext2_blockgroup_descriptor_write_all_copies(dev, bgnum, &bgdesc);
+	err = ext2_blockgroup_descriptor_write(dev, bgnum, &bgdesc);
 	if (err) {
 		return err;
 	}
 
-	/* update all superblock copies */
 	err = ext2_superblock_read(dev, &superblock);
 	if (err) {
 		return err;
 	}
 	superblock.s_free_inodes_count++;
-	err = ext2_superblock_write_all_copies(dev, &superblock);
+	err = ext2_superblock_write(dev, &superblock);
 	if (err) {
 		return err;
 	}
@@ -408,24 +318,22 @@ int ext2_inode_counter_decrement(ext2_blkdev_t *dev, u32 inum)
 	ext2_blockgroup_descriptor_t bgdesc;
 	ext2_superblock_t superblock;
 
-	/* update all blockgroup copies */
 	err = ext2_blockgroup_descriptor_read(dev, bgnum, &bgdesc);
 	if (err) {
 		return err;
 	}
 	bgdesc.bg_free_inodes_count--;
-	err = ext2_blockgroup_descriptor_write_all_copies(dev, bgnum, &bgdesc);
+	err = ext2_blockgroup_descriptor_write(dev, bgnum, &bgdesc);
 	if (err) {
 		return err;
 	}
 
-	/* update all superblock copies */
 	err = ext2_superblock_read(dev, &superblock);
 	if (err) {
 		return err;
 	}
 	superblock.s_free_inodes_count--;
-	err = ext2_superblock_write_all_copies(dev, &superblock);
+	err = ext2_superblock_write(dev, &superblock);
 	if (err) {
 		return err;
 	}
@@ -516,24 +424,22 @@ int ext2_block_counter_increment(ext2_blkdev_t *dev, u32 blknum)
 	ext2_blockgroup_descriptor_t bgdesc;
 	ext2_superblock_t superblock;
 
-	/* update all blockgroup copies */
 	err = ext2_blockgroup_descriptor_read(dev, bgnum, &bgdesc);
 	if (err) {
 		return err;
 	}
 	bgdesc.bg_free_blocks_count++;
-	err = ext2_blockgroup_descriptor_write_all_copies(dev, bgnum, &bgdesc);
+	err = ext2_blockgroup_descriptor_write(dev, bgnum, &bgdesc);
 	if (err) {
 		return err;
 	}
 
-	/* update all superblock copies */
 	err = ext2_superblock_read(dev, &superblock);
 	if (err) {
 		return err;
 	}
 	superblock.s_free_blocks_count++;
-	err = ext2_superblock_write_all_copies(dev, &superblock);
+	err = ext2_superblock_write(dev, &superblock);
 	if (err) {
 		return err;
 	}
@@ -548,24 +454,22 @@ int ext2_block_counter_decrement(ext2_blkdev_t *dev, u32 blknum)
 	ext2_blockgroup_descriptor_t bgdesc;
 	ext2_superblock_t superblock;
 
-	/* update all blockgroup copies */
 	err = ext2_blockgroup_descriptor_read(dev, bgnum, &bgdesc);
 	if (err) {
 		return err;
 	}
 	bgdesc.bg_free_blocks_count--;
-	err = ext2_blockgroup_descriptor_write_all_copies(dev, bgnum, &bgdesc);
+	err = ext2_blockgroup_descriptor_write(dev, bgnum, &bgdesc);
 	if (err) {
 		return err;
 	}
 
-	/* update all superblock copies */
 	err = ext2_superblock_read(dev, &superblock);
 	if (err) {
 		return err;
 	}
 	superblock.s_free_blocks_count--;
-	err = ext2_superblock_write_all_copies(dev, &superblock);
+	err = ext2_superblock_write(dev, &superblock);
 	if (err) {
 		return err;
 	}
