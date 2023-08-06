@@ -12,5 +12,7 @@ int memcmp(const void *s1, const void *s2, size_t n);
 int copy_to_user(void *to, const void *from, size_t n);
 int copy_from_user(void *to, const void *from, size_t n);
 
+size_t strlen(const char *s);
+
 #endif
 

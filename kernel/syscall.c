@@ -14,7 +14,11 @@ void debug_printint(i64 a0)
 	ext2_inode_t inode;
 	ext2_inode_read(list_next_entry(&ext2_dev_list, devlist), 2, &inode);
 
-	kprintf_s("i_osd1 %d\n", inode.i_ctime);
+	int err = ext2_file_create(list_next_entry(&ext2_dev_list, devlist),
+			2, "newfile", EXT2_S_IFREG, 0, 0, NULL);
+	if (err) {
+		kprintf_s("err %d\n", err);
+	}
 }
 
 void syscall(void)

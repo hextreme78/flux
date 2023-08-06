@@ -27,6 +27,7 @@ typedef struct ext2_directory_entry ext2_directory_entry_t;
 #define EXT2_INODE_SIZE 128
 
 /* -- file format -- */
+#define EXT2_FILE_FORMAT_MASK 0xf000
 #define EXT2_S_IFSOCK 0xc000 /* socket */
 #define EXT2_S_IFLNK  0xa000 /* symbolic link */
 #define EXT2_S_IFREG  0x8000 /* regular file */
@@ -48,6 +49,33 @@ typedef struct ext2_directory_entry ext2_directory_entry_t;
 #define EXT2_S_IROTH 0x0004 /* others read */
 #define EXT2_S_IWOTH 0x0002 /* others write */
 #define EXT2_S_IXOTH 0x0001 /* others execute */
+
+#define EXT2_FT_UNKNOWN  0
+#define EXT2_FT_REG_FILE 1
+#define EXT2_FT_DIR      2
+#define EXT2_FT_CHRDEV   3
+#define EXT2_FT_BLKDEV   4
+#define EXT2_FT_FIFO     5
+#define EXT2_FT_SOCK     6
+#define EXT2_FT_SYMLINK  7
+
+#define EXT2_SECRM_FL        0x00000001
+#define EXT2_UNRM_FL         0x00000002
+#define EXT2_COMPR_FL        0x00000004
+#define EXT2_SYNC_FL         0x00000008
+#define EXT2_IMMUTABLE_FL    0x00000010
+#define EXT2_APPEND_FL       0x00000020
+#define EXT2_NODUMP_FL       0x00000040
+#define EXT2_NOATIME_FL      0x00000080
+#define EXT2_DIRTY_FL        0x00000100
+#define EXT2_COMPRBLK_FL     0x00000200
+#define EXT2_NOCOMPR_FL      0x00000400
+#define EXT2_ECOMPR_FL       0x00000800
+#define EXT2_BTREE_FL        0x00001000
+#define EXT2_INDEX_FL        0x00001000
+#define EXT2_IMAGIC_FL       0x00002000
+#define EXT3_JOURNAL_DATA_FL 0x00004000
+#define EXT2_RESERVED_FL     0x80000000
 
 struct ext2_superblock {
 	u32 s_inodes_count;
@@ -128,7 +156,7 @@ struct ext2_blockgroup_descriptor {
 struct ext2_inode {
 	u16 i_mode;
 	u16 i_uid;
-	u32 i_size;
+	u32 i_size; /* low 32 bits of size in rev1 */
 	u32 i_atime;
 	u32 i_ctime;
 	u32 i_mtime;
@@ -141,7 +169,7 @@ struct ext2_inode {
 	u32 i_block[15];
 	u32 i_generation;
 	u32 i_file_acl;
-	u32 i_dir_acl;
+	u32 i_dir_acl; /* high 32 bits of size in rev1 */
 	u32 i_faddr;
 	u8 i_osd2[12];
 } __attribute__((packed));
