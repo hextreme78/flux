@@ -593,8 +593,7 @@ int ext2_block_free(ext2_blkdev_t *dev, u32 blknum)
 	return 0;
 }
 
-int ext2_file_read(ext2_blkdev_t *dev, u32 inum, void *buf, u64 len, u64 offset,
-		bool failonzero)
+int ext2_file_read(ext2_blkdev_t *dev, u32 inum, void *buf, u64 len, u64 offset)
 {
 	int err;
 	ext2_inode_t inode;
@@ -608,6 +607,18 @@ int ext2_file_read(ext2_blkdev_t *dev, u32 inum, void *buf, u64 len, u64 offset,
 	err = ext2_inode_read(dev, inum, &inode);
 	if (err) {
 		return err;
+	}
+	
+	/* check file size */
+	if (dev->rev_level == EXT2_GOOD_OLD_REV) {
+		if (inode.i_size < offset + len) {
+			return -EIO;
+		}
+	} else {
+		if (((u64) inode.i_size + (((u64) inode.i_dir_acl) << 32)) <
+				offset + len) {
+			return -EIO;
+		}
 	}
 
 	for (u64 curblock = firstblock; curblock <= lastblock; curblock++) {
@@ -639,8 +650,6 @@ int ext2_file_read(ext2_blkdev_t *dev, u32 inum, void *buf, u64 len, u64 offset,
 				u64 off = 12;
 				blocknum = inode.i_block[12];
 				if (!blocknum) {
-					if (failonzero)
-						return -EIO;
 					goto blocknumzero;
 				}
 				err = ext2_block_read(dev, blocknum, blockbuf);
@@ -661,8 +670,6 @@ int ext2_file_read(ext2_blkdev_t *dev, u32 inum, void *buf, u64 len, u64 offset,
 				blocknum = ((u32 *) blockbuf)[(curblock - off) /
 					singly_indirect];
 				if (!blocknum) {
-					if (failonzero)
-						return -EIO;
 					goto blocknumzero;
 				}
 				err = ext2_block_read(dev, blocknum, blockbuf);
@@ -676,8 +683,6 @@ int ext2_file_read(ext2_blkdev_t *dev, u32 inum, void *buf, u64 len, u64 offset,
 				u64 off = 12 + singly_indirect + doubly_indirect;
 				blocknum = inode.i_block[14];
 				if (!blocknum) {
-					if (failonzero)
-						return -EIO;
 					goto blocknumzero;
 				}
 				err = ext2_block_read(dev, blocknum, blockbuf);
@@ -687,8 +692,6 @@ int ext2_file_read(ext2_blkdev_t *dev, u32 inum, void *buf, u64 len, u64 offset,
 				blocknum = ((u32 *) blockbuf)[(curblock - off) /
 					doubly_indirect];
 				if (!blocknum) {
-					if (failonzero)
-						return -EIO;
 					goto blocknumzero;
 				}
 				err = ext2_block_read(dev, blocknum, blockbuf);
@@ -699,8 +702,6 @@ int ext2_file_read(ext2_blkdev_t *dev, u32 inum, void *buf, u64 len, u64 offset,
 				blocknum = ((u32 *) blockbuf)[(curblock - off) /
 					singly_indirect];
 				if (!blocknum) {
-					if (failonzero)
-						return -EIO;
 					goto blocknumzero;
 				}
 				err = ext2_block_read(dev, blocknum, blockbuf);
@@ -1053,6 +1054,27 @@ int ext2_file_write(ext2_blkdev_t *dev, u32 inum, void *buf, u64 len, u64 offset
 		ncopied += inblock_len;
 	}
 
+	/* update file size */
+	if (dev->rev_level == EXT2_GOOD_OLD_REV) {
+		if (inode.i_size < offset + ncopied) {
+			inode.i_size = offset + ncopied;
+			err = ext2_inode_write(dev, inum, &inode);
+			if (err) {
+				return err;
+			}
+		}
+	} else {
+		if (((u64) inode.i_size + (((u64) inode.i_dir_acl) << 32)) <
+				offset + ncopied) {
+			inode.i_size = (u32) offset + ncopied;
+			inode.i_dir_acl = (offset + ncopied) >> 32;
+			err = ext2_inode_write(dev, inum, &inode);
+			if (err) {
+				return err;
+			}
+		}
+	}
+
 	return 0;
 }
 
@@ -1077,7 +1099,7 @@ int ext2_file_create(ext2_blkdev_t *dev, u32 parent_inum, const char *name,
 		return err;
 	}
 
-	if (!(parent_inode.i_mode & EXT2_S_IFDIR)) {
+	if (!((parent_inode.i_mode & EXT2_FILE_FORMAT_MASK) == EXT2_S_IFDIR)) {
 		return -ENOTDIR;
 	}
 
@@ -1102,7 +1124,7 @@ int ext2_file_create(ext2_blkdev_t *dev, u32 parent_inum, const char *name,
 
 	while (1) {
 		err = ext2_file_read(dev, parent_inum, direntry, sizeof(*direntry),
-				offset, true);
+				offset);
 		if (err == -EIO) {
 			/* create new direntry */
 			err = ext2_inode_allocate(dev, &inum);
@@ -1272,6 +1294,29 @@ int ext2_file_create(ext2_blkdev_t *dev, u32 parent_inum, const char *name,
 		if (err) {
 			return err;
 		}
+
+		err = ext2_inode_read(dev, parent_inum, &parent_inode);
+		if (err) {
+			return err;
+		}
+
+		parent_inode.i_links_count++;
+		err = ext2_inode_write(dev, parent_inum, &parent_inode);
+		if (err) {
+			return err;
+		}
+
+		err = ext2_inode_read(dev, inum, &inode);
+		if (err) {
+			return err;
+		}
+
+		inode.i_links_count++;
+		err = ext2_inode_write(dev, inum, &inode);
+		if (err) {
+			return err;
+		}
+
 	} else if ((mode & EXT2_FILE_FORMAT_MASK) == EXT2_S_IFLNK) {
 		size_t linklen = strlen(symlink);
 		if (!linklen) {
@@ -1289,10 +1334,85 @@ int ext2_file_create(ext2_blkdev_t *dev, u32 parent_inum, const char *name,
 			}
 		} else {
 			memcpy(inode.i_block, symlink, linklen);
+			inode.i_size = linklen;
+			err = ext2_inode_write(dev, inum, &inode);
+			if (err) {
+				return err;
+			}
 		}
 	}
 
-	ext2_file_write(dev, inum, "Hello, world!\n", 14, 0);
+	return 0;
+}
+
+int ext2_mount()
+{
+
+	return 0;
+}
+
+int ext2_umount()
+{
+
+	return 0;
+}
+
+int ext2_create()
+{
+
+	return 0;
+}
+
+int ext2_lookup()
+{
+
+	return 0;
+}
+
+int ext2_link()
+{
+
+	return 0;
+}
+
+int ext2_unlink()
+{
+
+	return 0;
+}
+
+int ext2_symlink()
+{
+
+	return 0;
+}
+
+int ext2_mkdir()
+{
+
+	return 0;
+}
+
+int ext2_rmdir()
+{
+
+	return 0;
+}
+
+int ext2_mknod()
+{
+
+	return 0;
+}
+
+int ext2_rename()
+{
+
+	return 0;
+}
+
+int ext2_readlink()
+{
 
 	return 0;
 }
