@@ -12,6 +12,27 @@ typedef struct ext2_directory_entry ext2_directory_entry_t;
 #include <kernel/spinlock.h>
 #include <kernel/list.h>
 
+#define EXT2_INODE_SET_I_SIZE(devptr, inode, size) \
+	({ \
+		if ((devptr)->rev_level == EXT2_GOOD_OLD_REV) { \
+			(inode).i_size = (size); \
+		} else { \
+			(inode).i_size = (u32) (size); \
+			(inode).i_dir_acl = (size) >> 32; \
+		} \
+	})
+
+#define EXT2_INODE_GET_I_SIZE(devptr, inode) \
+	({ \
+	 	u64 size; \
+		if ((devptr)->rev_level == EXT2_GOOD_OLD_REV) { \
+			size = (inode).i_size; \
+		} else { \
+			size = (u64) (inode).i_size + (((u64) (inode).i_dir_acl) << 32); \
+		} \
+		size; \
+	})
+
 #define EXT2_SUPERBLOCK_START 1024
 
 #define EXT2_SUPER_MAGIC 0xef53

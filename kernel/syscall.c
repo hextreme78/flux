@@ -14,16 +14,26 @@ void debug_printint(i64 a0)
 	ext2_inode_t inode;
 	ext2_inode_read(list_next_entry(&ext2_dev_list, devlist), 2, &inode);
 
-	int err = ext2_file_create(list_next_entry(&ext2_dev_list, devlist),
-			2, "testdir",
-			EXT2_S_IFDIR |
-			EXT2_S_IRUSR | EXT2_S_IWUSR | EXT2_S_IXUSR |
-			EXT2_S_IRGRP | EXT2_S_IXGRP |
-			EXT2_S_IXOTH,
-			1000, 1000, NULL);
+	u32 inum;
+	int err = ext2_file_lookup(list_next_entry(&ext2_dev_list, devlist),
+			"/test0/test1/test2/link", &inum, true);
 	if (err) {
 		kprintf_s("err %d\n", err);
 	}
+	kprintf_s("inum %d\n", inum);
+
+	/*
+	int err = ext2_directory_create(list_next_entry(&ext2_dev_list, devlist),
+			2, "testdir",
+			EXT2_S_IRUSR | EXT2_S_IWUSR | EXT2_S_IXUSR |
+			EXT2_S_IRGRP | EXT2_S_IXGRP |
+			EXT2_S_IXOTH,
+			1000, 1000);
+	if (err) {
+		kprintf_s("err %d\n", err);
+	}*/
+
+	//ext2_file_write(list_next_entry(&ext2_dev_list, devlist), 12, "Hello", 5, 0);
 }
 
 void syscall(void)
