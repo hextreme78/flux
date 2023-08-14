@@ -1613,7 +1613,8 @@ int ext2_symlink_read(ext2_blkdev_t *dev, u32 inum, char *pathbuf)
 }
 
 /* get inode number via file path */
-int ext2_file_lookup(ext2_blkdev_t *dev, const char *path, u32 *inum, bool followlink)
+int ext2_file_lookup(ext2_blkdev_t *dev, const char *path, u32 *inum, u32 relinum,
+		bool followlink)
 {
 	int err;
 	size_t i = 0;
@@ -1630,16 +1631,15 @@ int ext2_file_lookup(ext2_blkdev_t *dev, const char *path, u32 *inum, bool follo
 	if (path[0] == '/') {
 		/* absolute path */
 		curinum = EXT2_ROOT_INODE;
-		err = ext2_inode_read(dev, curinum, &curinode);
-		if (err) {
-			return err;
-		}
 		i++;
 	} else {
-		/* TODO */
 		/* relative path */
-		curinum = 0;
-		return -1;
+		curinum = relinum;
+	}
+
+	err = ext2_inode_read(dev, curinum, &curinode);
+	if (err) {
+		return err;
 	}
 
 	while (path[i]) {
@@ -1678,6 +1678,7 @@ int ext2_file_lookup(ext2_blkdev_t *dev, const char *path, u32 *inum, bool follo
 			}
 
 			if (!memcmp(name, direntry->name, direntry->name_len)) {
+				u32 previnum = curinum;
 				curinum = direntry->inode;
 				err = ext2_inode_read(dev, curinum, &curinode);
 				if (err) {
@@ -1695,7 +1696,7 @@ int ext2_file_lookup(ext2_blkdev_t *dev, const char *path, u32 *inum, bool follo
 					}
 
 					err = ext2_file_lookup(dev, linkpath,
-							&curinum, true);
+							&curinum, previnum, true);
 					if (err) {
 						return err;
 					}

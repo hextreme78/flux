@@ -16,7 +16,7 @@ void debug_printint(i64 a0)
 
 	u32 inum;
 	int err = ext2_file_lookup(list_next_entry(&ext2_dev_list, devlist),
-			"/link0/link1/test2/link", &inum, false);
+			"/link", &inum, 0, true);
 	if (err) {
 		kprintf_s("err %d\n", err);
 	}
