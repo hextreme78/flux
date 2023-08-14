@@ -1654,68 +1654,63 @@ int ext2_file_lookup(ext2_blkdev_t *dev, const char *path, u32 *inum, bool follo
 			i++;
 		}
 
-		if ((curinode.i_mode & EXT2_FILE_FORMAT_MASK) == EXT2_S_IFDIR) {
-			while (1) {
-				err = ext2_file_read(dev, curinum, direntry,
-						sizeof(*direntry), offset);
+		if ((curinode.i_mode & EXT2_FILE_FORMAT_MASK) != EXT2_S_IFDIR) {
+			return -ENOTDIR;
+		}
+
+		while (1) {
+			err = ext2_file_read(dev, curinum, direntry,
+					sizeof(*direntry), offset);
+			if (err) {
+				return err;
+			}
+
+			if (direntry->name_len != j) {
+				offset += direntry->rec_len;
+				continue;
+			}
+
+			err = ext2_file_read(dev, curinum, direntry->name,
+					direntry->name_len,
+					offset + sizeof(*direntry));
+			if (err) {
+				return err;
+			}
+
+			if (!memcmp(name, direntry->name, direntry->name_len)) {
+				curinum = direntry->inode;
+				err = ext2_inode_read(dev, curinum, &curinode);
 				if (err) {
 					return err;
 				}
-
-				if (direntry->name_len != j) {
-					offset += direntry->rec_len;
-					continue;
-				}
-
-				err = ext2_file_read(dev, curinum, direntry->name,
-						direntry->name_len,
-						offset + sizeof(*direntry));
-				if (err) {
-					return err;
-				}
-
-				if (!memcmp(name, direntry->name, direntry->name_len)) {
-					curinum = direntry->inode;
-					err = ext2_inode_read(dev, curinum, &curinode);
+		
+				if ((path[i] || followlink) &&
+						(curinode.i_mode & EXT2_FILE_FORMAT_MASK) ==
+						EXT2_S_IFLNK) {
+					char linkpath[curinode.i_size + 1];
+					err = ext2_symlink_read(dev, curinum,
+							linkpath);
 					if (err) {
 						return err;
 					}
-					break;
+
+					err = ext2_file_lookup(dev, linkpath,
+							&curinum, true);
+					if (err) {
+						return err;
+					}
+
+					err = ext2_inode_read(dev, curinum,
+							&curinode);
+					if (err) {
+						return err;
+					}
 				}
 
-				offset += direntry->rec_len;
-			}
-		} else if ((curinode.i_mode & EXT2_FILE_FORMAT_MASK) == EXT2_S_IFLNK) {
-			char linkpath[curinode.i_size + 1];
-			err = ext2_symlink_read(dev, curinum, linkpath);
-			if (err) {
-				return err;
+				break;
 			}
 
-			err = ext2_file_lookup(dev, linkpath, &curinum, followlink);
-			if (err) {
-				return err;
-			}
-			
-			err = ext2_inode_read(dev, curinum, &curinode);
-			if (err) {
-				return err;
-			}
-		} else {
-			return -ENOTDIR;
-		}
-	}
-
-	if (followlink && ((curinode.i_mode & EXT2_FILE_FORMAT_MASK) == EXT2_S_IFLNK)) {
-		char linkpath[curinode.i_size + 1];
-		err = ext2_symlink_read(dev, curinum, linkpath);
-		if (err) {
-			return err;
-		}
-
-		err = ext2_file_lookup(dev, linkpath, &curinum, followlink);
-		if (err) {
-			return err;
+			offset += direntry->rec_len;
 		}
 	}
 
