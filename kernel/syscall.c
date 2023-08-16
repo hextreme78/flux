@@ -11,16 +11,17 @@ void debug_printint(i64 a0)
 	kprintf_s("debug_printint %d\n", a0);
 
 	extern ext2_blkdev_t ext2_dev_list;
-	ext2_inode_t inode;
-	ext2_inode_read(list_next_entry(&ext2_dev_list, devlist), 2, &inode);
+//	ext2_inode_t inode;
+//	ext2_inode_read(list_next_entry(&ext2_dev_list, devlist), 2, &inode);
 
-	int err = ext2_directory_delete(list_next_entry(&ext2_dev_list, devlist),
-			2, 3905);
+/*
+	int err = ext2_regular_delete(list_next_entry(&ext2_dev_list, devlist),
+			2, 12);
 	if (err) {
 		kprintf_s("err %d\n", err);
 	}
-
-/*
+*/
+	/*
 	u32 inum;
 	int err = ext2_file_lookup(list_next_entry(&ext2_dev_list, devlist),
 			"/file", &inum, 0, true);
@@ -30,12 +31,8 @@ void debug_printint(i64 a0)
 	kprintf_s("inum %d\n", inum);
 */
 /*
-	int err = ext2_directory_create(list_next_entry(&ext2_dev_list, devlist),
-			2, "testdir",
-			EXT2_S_IRUSR | EXT2_S_IWUSR | EXT2_S_IXUSR |
-			EXT2_S_IRGRP | EXT2_S_IXGRP |
-			EXT2_S_IXOTH,
-			1000, 1000);
+	int err = ext2_hardlink_create(list_next_entry(&ext2_dev_list, devlist),
+			2, 12, "hardlink");
 	if (err) {
 		kprintf_s("err %d\n", err);
 	}
