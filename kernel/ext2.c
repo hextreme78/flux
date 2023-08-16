@@ -608,7 +608,7 @@ int ext2_file_read(ext2_blkdev_t *dev, u32 inum, void *buf, u64 len, u64 offset)
 	if (err) {
 		return err;
 	}
-	
+
 	/* check file size */
 	if (EXT2_INODE_GET_I_SIZE(dev, inode) < offset + len) {
 		return -EIO;
@@ -1048,7 +1048,9 @@ int ext2_file_write(ext2_blkdev_t *dev, u32 inum, void *buf, u64 len, u64 offset
 	}
 
 	/* update file size */
-	EXT2_INODE_SET_I_SIZE(dev, inode, offset + ncopied);
+	if (EXT2_INODE_GET_I_SIZE(dev, inode) < offset + ncopied) {
+		EXT2_INODE_SET_I_SIZE(dev, inode, offset + ncopied);
+	}
 	err = ext2_inode_write(dev, inum, &inode);
 	if (err) {
 		return err;
@@ -1684,7 +1686,7 @@ int ext2_file_lookup(ext2_blkdev_t *dev, const char *path, u32 *inum, u32 relinu
 				if (err) {
 					return err;
 				}
-		
+
 				if ((path[i] || followlink) &&
 						(curinode.i_mode & EXT2_FILE_FORMAT_MASK) ==
 						EXT2_S_IFLNK) {
@@ -1720,33 +1722,662 @@ int ext2_file_lookup(ext2_blkdev_t *dev, const char *path, u32 *inum, u32 relinu
 	return 0;
 }
 
-int ext2_regular_delete(ext2_blkdev_t *dev, u32 inum)
+int ext2_regular_delete(ext2_blkdev_t *dev, u32 parent_inum, u32 inum)
 {
+	int err = 0;
+	size_t offset = 0;
+	ext2_inode_t parent_inode, inode;
+	ext2_directory_entry_t direntry0, direntry1;
+	u8 blockbuf0[dev->block_size],
+	blockbuf1[dev->block_size], blockbuf2[dev->block_size];
+
+	err = ext2_inode_read(dev, inum, &inode);
+	if (err) {
+		return err;
+	}
+
+	err = ext2_inode_read(dev, parent_inum, &parent_inode);
+	if (err) {
+		return err;
+	}
+
+	if ((parent_inode.i_mode & EXT2_FILE_FORMAT_MASK) != EXT2_S_IFDIR) {
+		return -ENOTDIR;
+	}
 	
+	if ((inode.i_mode & EXT2_FILE_FORMAT_MASK) != EXT2_S_IFREG) {
+		return -EINVAL;
+	}
+
+	/* delete direntry */
+	while (1) {
+		err = ext2_file_read(dev, parent_inum, &direntry1,
+				sizeof(direntry1), offset);
+		if (err) {
+			return err;
+		}
+		if (direntry1.inode == inum) {
+			if (!(offset % dev->block_size)) {
+				direntry1.inode = 0;
+				err = ext2_file_write(dev, parent_inum, &direntry1,
+						sizeof(direntry1), offset);
+				if (err) {
+					return err;
+				}
+			} else {
+				u16 rec_len = direntry0.rec_len;
+				direntry0.rec_len += direntry1.rec_len;
+				err = ext2_file_write(dev, parent_inum, &direntry0,
+						sizeof(direntry0),
+						offset - rec_len);
+				if (err) {
+					return err;
+				}
+			}
+
+			break;
+		}
+
+		offset += direntry1.rec_len;
+		direntry0 = direntry1;
+	}
+
+	/* delete file */
+	if (inode.i_links_count == 1) {
+		u64 ptrsperblock = dev->block_size / sizeof(*inode.i_block);
+		for (u32 i = 0; i < 12; i++) {
+			if (inode.i_block[i]) {
+				err = ext2_block_free(dev, inode.i_block[i]);
+				if (err) {
+					return err;
+				}
+				inode.i_blocks--;
+			}
+			if (!inode.i_blocks) {
+				goto inodefree;
+			}
+		}
+
+		if (inode.i_block[12]) {
+			err = ext2_block_read(dev, inode.i_block[12], blockbuf0);
+			if (err) {
+				return err;
+			}
+			for (u32 i = 0; i < ptrsperblock; i++) {
+				if (((u32 *) blockbuf0)[i]) {
+					err = ext2_block_free(dev,
+							((u32 *) blockbuf0)[i]);
+					if (err) {
+						return err;
+					}
+					inode.i_blocks--;
+				}
+			}
+			err = ext2_block_free(dev, inode.i_block[12]);
+			if (err) {
+				return err;
+			}
+			inode.i_blocks--;
+			if (!inode.i_blocks) {
+				goto inodefree;
+			}
+		}
+
+		if (inode.i_block[13]) {
+			err = ext2_block_read(dev, inode.i_block[13], blockbuf0);
+			if (err) {
+				return err;
+			}
+			for (u32 i = 0; i < ptrsperblock; i++) {
+				if (((u32 *) blockbuf0)[i]) {
+					err = ext2_block_read(dev, ((u32 *) blockbuf0)[i],
+							blockbuf1);
+					if (err) {
+						return err;
+					}
+					for (u32 j = 0; j < ptrsperblock; j++) {
+						if (((u32 *) blockbuf1)[j]) {
+							err = ext2_block_free(dev,
+								((u32 *)blockbuf1)[j]);
+							if (err) {
+								return err;
+							}
+							inode.i_blocks--;
+						}
+					}
+					err = ext2_block_free(dev,
+							((u32 *) blockbuf0)[i]);
+					if (err) {
+						return err;
+					}
+					inode.i_blocks--;
+				}
+			}
+			err = ext2_block_free(dev, inode.i_block[13]);
+			if (err) {
+				return err;
+			}
+			inode.i_blocks--;
+			if (!inode.i_blocks) {
+				goto inodefree;
+			}
+		}
+
+		if (inode.i_block[14]) {
+			err = ext2_block_read(dev, inode.i_block[14], blockbuf0);
+			if (err) {
+				return err;
+			}
+			for (u32 i = 0; i < ptrsperblock; i++) {
+				if (((u32 *) blockbuf0)[i]) {
+					err = ext2_block_read(dev, ((u32 *) blockbuf0)[i],
+							blockbuf1);
+					if (err) {
+						return err;
+					}
+					for (u32 j = 0; j < ptrsperblock; j++) {
+						if (((u32 *) blockbuf1)[j]) {
+							err = ext2_block_read(dev,
+								((u32 *) blockbuf1)[j],
+								blockbuf2);
+							if (err) {
+								return err;
+							}
+							for (u32 k = 0; k < ptrsperblock;
+									k++) {
+								if (((u32 *) blockbuf2)[k]) {
+									err = ext2_block_free(dev,
+										((u32 *)blockbuf2)[k]);
+									if (err) {
+										return err;
+									}
+									inode.i_blocks--;
+								}
+							}
+							err = ext2_block_free(dev,
+								((u32 *) blockbuf1)[j]);
+							if (err) {
+								return err;
+							}
+							inode.i_blocks--;
+						}
+					}
+					err = ext2_block_free(dev,
+							((u32 *) blockbuf0)[i]);
+					if (err) {
+						return err;
+					}
+					inode.i_blocks--;
+				}
+			}
+			err = ext2_block_free(dev, inode.i_block[14]);
+			if (err) {
+				return err;
+			}
+			inode.i_blocks--;
+			if (!inode.i_blocks) {
+				goto inodefree;
+			}
+		}
+inodefree:
+		err = ext2_inode_free(dev, inum);
+		if (err) {
+			return err;
+		}
+	} else {
+		inode.i_links_count--;
+		err = ext2_inode_write(dev, inum, &inode);
+		if (err) {
+			return err;
+		}
+	}
 
 	return 0;
 }
 
-int ext2_directory_delete()
+int ext2_directory_delete(ext2_blkdev_t *dev, u32 parent_inum, u32 inum)
 {
+	int err = 0;
+	size_t offset = 0;
+	ext2_inode_t parent_inode, inode;
+	ext2_directory_entry_t direntry0, direntry1;
+	u8 blockbuf0[dev->block_size],
+	blockbuf1[dev->block_size], blockbuf2[dev->block_size];
+
+	err = ext2_inode_read(dev, inum, &inode);
+	if (err) {
+		return err;
+	}
+
+	err = ext2_inode_read(dev, parent_inum, &parent_inode);
+	if (err) {
+		return err;
+	}
+
+	/* directory should contain only . and .. entries */
+	err = ext2_file_read(dev, inum, &direntry1,
+			sizeof(direntry1), offset);
+	if (err) {
+		return err;
+	}
+	offset += direntry1.rec_len;
+	err = ext2_file_read(dev, inum, &direntry1,
+			sizeof(direntry1), offset);
+	if (err) {
+		return err;
+	}
+	offset += direntry1.rec_len;
+	err = ext2_file_read(dev, inum, &direntry1,
+			sizeof(direntry1), offset);
+	if (err != -EIO) {
+		return -ENOTEMPTY;
+	}
+	offset = 0;
+
+	if ((parent_inode.i_mode & EXT2_FILE_FORMAT_MASK) != EXT2_S_IFDIR) {
+		return -ENOTDIR;
+	}
+	if ((inode.i_mode & EXT2_FILE_FORMAT_MASK) != EXT2_S_IFDIR) {
+		return -EINVAL;
+	}
+
+	/* delete direntry */
+	while (1) {
+		err = ext2_file_read(dev, parent_inum, &direntry1,
+				sizeof(direntry1), offset);
+		if (err) {
+			return err;
+		}
+		if (direntry1.inode == inum) {
+			if (!(offset % dev->block_size)) {
+				direntry1.inode = 0;
+				err = ext2_file_write(dev, parent_inum, &direntry1,
+						sizeof(direntry1), offset);
+				if (err) {
+					return err;
+				}
+			} else {
+				u16 rec_len = direntry0.rec_len;
+				direntry0.rec_len += direntry1.rec_len;
+				err = ext2_file_write(dev, parent_inum, &direntry0,
+						sizeof(direntry0),
+						offset - rec_len);
+				if (err) {
+					return err;
+				}
+			}
+
+			break;
+		}
+
+		offset += direntry1.rec_len;
+		direntry0 = direntry1;
+	}
+
+	/* delete file */
+	u64 ptrsperblock = dev->block_size / sizeof(*inode.i_block);
+	for (u32 i = 0; i < 12; i++) {
+		if (inode.i_block[i]) {
+			err = ext2_block_free(dev, inode.i_block[i]);
+			if (err) {
+				return err;
+			}
+			inode.i_blocks--;
+		}
+		if (!inode.i_blocks) {
+			goto inodefree;
+		}
+	}
+
+	if (inode.i_block[12]) {
+		err = ext2_block_read(dev, inode.i_block[12], blockbuf0);
+		if (err) {
+			return err;
+		}
+		for (u32 i = 0; i < ptrsperblock; i++) {
+			if (((u32 *) blockbuf0)[i]) {
+				err = ext2_block_free(dev,
+						((u32 *) blockbuf0)[i]);
+				if (err) {
+					return err;
+				}
+				inode.i_blocks--;
+			}
+		}
+		err = ext2_block_free(dev, inode.i_block[12]);
+		if (err) {
+			return err;
+		}
+		inode.i_blocks--;
+		if (!inode.i_blocks) {
+			goto inodefree;
+		}
+	}
+
+	if (inode.i_block[13]) {
+		err = ext2_block_read(dev, inode.i_block[13], blockbuf0);
+		if (err) {
+			return err;
+		}
+		for (u32 i = 0; i < ptrsperblock; i++) {
+			if (((u32 *) blockbuf0)[i]) {
+				err = ext2_block_read(dev, ((u32 *) blockbuf0)[i],
+						blockbuf1);
+				if (err) {
+					return err;
+				}
+				for (u32 j = 0; j < ptrsperblock; j++) {
+					if (((u32 *) blockbuf1)[j]) {
+						err = ext2_block_free(dev,
+							((u32 *)blockbuf1)[j]);
+						if (err) {
+							return err;
+						}
+						inode.i_blocks--;
+					}
+				}
+				err = ext2_block_free(dev,
+						((u32 *) blockbuf0)[i]);
+				if (err) {
+					return err;
+				}
+				inode.i_blocks--;
+			}
+		}
+		err = ext2_block_free(dev, inode.i_block[13]);
+		if (err) {
+			return err;
+		}
+		inode.i_blocks--;
+		if (!inode.i_blocks) {
+			goto inodefree;
+		}
+	}
+
+	if (inode.i_block[14]) {
+		err = ext2_block_read(dev, inode.i_block[14], blockbuf0);
+		if (err) {
+			return err;
+		}
+		for (u32 i = 0; i < ptrsperblock; i++) {
+			if (((u32 *) blockbuf0)[i]) {
+				err = ext2_block_read(dev, ((u32 *) blockbuf0)[i],
+						blockbuf1);
+				if (err) {
+					return err;
+				}
+				for (u32 j = 0; j < ptrsperblock; j++) {
+					if (((u32 *) blockbuf1)[j]) {
+						err = ext2_block_read(dev,
+							((u32 *) blockbuf1)[j],
+							blockbuf2);
+						if (err) {
+							return err;
+						}
+						for (u32 k = 0; k < ptrsperblock;
+								k++) {
+							if (((u32 *) blockbuf2)[k]) {
+								err = ext2_block_free(dev,
+									((u32 *)blockbuf2)[k]);
+								if (err) {
+									return err;
+								}
+								inode.i_blocks--;
+							}
+						}
+						err = ext2_block_free(dev,
+							((u32 *) blockbuf1)[j]);
+						if (err) {
+							return err;
+						}
+						inode.i_blocks--;
+					}
+				}
+				err = ext2_block_free(dev,
+						((u32 *) blockbuf0)[i]);
+				if (err) {
+					return err;
+				}
+				inode.i_blocks--;
+			}
+		}
+		err = ext2_block_free(dev, inode.i_block[14]);
+		if (err) {
+			return err;
+		}
+		inode.i_blocks--;
+		if (!inode.i_blocks) {
+			goto inodefree;
+		}
+	}
+inodefree:
+	err = ext2_inode_free(dev, inum);
+	if (err) {
+		return err;
+	}
+
+	parent_inode.i_links_count--;
+	err = ext2_inode_write(dev, parent_inum, &parent_inode);
+	if (err) {
+		return err;
+	}
 
 	return 0;
 }
 
-int ext2_symlink_delete()
+int ext2_symlink_delete(ext2_blkdev_t *dev, u32 parent_inum, u32 inum)
 {
+	int err = 0;
+	size_t offset = 0;
+	ext2_inode_t parent_inode, inode;
+	ext2_directory_entry_t direntry0, direntry1;
+	u8 blockbuf0[dev->block_size],
+	blockbuf1[dev->block_size], blockbuf2[dev->block_size];
 
-	return 0;
-}
+	err = ext2_inode_read(dev, inum, &inode);
+	if (err) {
+		return err;
+	}
 
-int ext2_root_mount()
-{
+	err = ext2_inode_read(dev, parent_inum, &parent_inode);
+	if (err) {
+		return err;
+	}
 
-	return 0;
-}
+	if ((parent_inode.i_mode & EXT2_FILE_FORMAT_MASK) != EXT2_S_IFDIR) {
+		return -ENOTDIR;
+	}
+	if ((parent_inode.i_mode & EXT2_FILE_FORMAT_MASK) != EXT2_S_IFLNK) {
+		return -EINVAL;
+	}
 
-int ext2_root_umount()
-{
+	/* delete direntry */
+	while (1) {
+		err = ext2_file_read(dev, parent_inum, &direntry1,
+				sizeof(direntry1), offset);
+		if (err) {
+			return err;
+		}
+		if (direntry1.inode == inum) {
+			if (!(offset % dev->block_size)) {
+				direntry1.inode = 0;
+				err = ext2_file_write(dev, parent_inum, &direntry1,
+						sizeof(direntry1), offset);
+				if (err) {
+					return err;
+				}
+			} else {
+				u16 rec_len = direntry0.rec_len;
+				direntry0.rec_len += direntry1.rec_len;
+				err = ext2_file_write(dev, parent_inum, &direntry0,
+						sizeof(direntry0),
+						offset - rec_len);
+				if (err) {
+					return err;
+				}
+			}
+
+			break;
+		}
+
+		offset += direntry1.rec_len;
+		direntry0 = direntry1;
+	}
+
+	/* delete file */
+	if (inode.i_links_count == 1) {
+		u64 ptrsperblock = dev->block_size / sizeof(*inode.i_block);
+
+		if (EXT2_INODE_GET_I_SIZE(dev, inode) <= 60) {
+			goto inodefree;
+		}
+
+		for (u32 i = 0; i < 12; i++) {
+			if (inode.i_block[i]) {
+				err = ext2_block_free(dev, inode.i_block[i]);
+				if (err) {
+					return err;
+				}
+				inode.i_blocks--;
+			}
+			if (!inode.i_blocks) {
+				goto inodefree;
+			}
+		}
+
+		if (inode.i_block[12]) {
+			err = ext2_block_read(dev, inode.i_block[12], blockbuf0);
+			if (err) {
+				return err;
+			}
+			for (u32 i = 0; i < ptrsperblock; i++) {
+				if (((u32 *) blockbuf0)[i]) {
+					err = ext2_block_free(dev,
+							((u32 *) blockbuf0)[i]);
+					if (err) {
+						return err;
+					}
+					inode.i_blocks--;
+				}
+			}
+			err = ext2_block_free(dev, inode.i_block[12]);
+			if (err) {
+				return err;
+			}
+			inode.i_blocks--;
+			if (!inode.i_blocks) {
+				goto inodefree;
+			}
+		}
+
+		if (inode.i_block[13]) {
+			err = ext2_block_read(dev, inode.i_block[13], blockbuf0);
+			if (err) {
+				return err;
+			}
+			for (u32 i = 0; i < ptrsperblock; i++) {
+				if (((u32 *) blockbuf0)[i]) {
+					err = ext2_block_read(dev, ((u32 *) blockbuf0)[i],
+							blockbuf1);
+					if (err) {
+						return err;
+					}
+					for (u32 j = 0; j < ptrsperblock; j++) {
+						if (((u32 *) blockbuf1)[j]) {
+							err = ext2_block_free(dev,
+								((u32 *)blockbuf1)[j]);
+							if (err) {
+								return err;
+							}
+							inode.i_blocks--;
+						}
+					}
+					err = ext2_block_free(dev,
+							((u32 *) blockbuf0)[i]);
+					if (err) {
+						return err;
+					}
+					inode.i_blocks--;
+				}
+			}
+			err = ext2_block_free(dev, inode.i_block[13]);
+			if (err) {
+				return err;
+			}
+			inode.i_blocks--;
+			if (!inode.i_blocks) {
+				goto inodefree;
+			}
+		}
+
+		if (inode.i_block[14]) {
+			err = ext2_block_read(dev, inode.i_block[14], blockbuf0);
+			if (err) {
+				return err;
+			}
+			for (u32 i = 0; i < ptrsperblock; i++) {
+				if (((u32 *) blockbuf0)[i]) {
+					err = ext2_block_read(dev, ((u32 *) blockbuf0)[i],
+							blockbuf1);
+					if (err) {
+						return err;
+					}
+					for (u32 j = 0; j < ptrsperblock; j++) {
+						if (((u32 *) blockbuf1)[j]) {
+							err = ext2_block_read(dev,
+								((u32 *) blockbuf1)[j],
+								blockbuf2);
+							if (err) {
+								return err;
+							}
+							for (u32 k = 0; k < ptrsperblock;
+									k++) {
+								if (((u32 *) blockbuf2)[k]) {
+									err = ext2_block_free(dev,
+										((u32 *)blockbuf2)[k]);
+									if (err) {
+										return err;
+									}
+									inode.i_blocks--;
+								}
+							}
+							err = ext2_block_free(dev,
+								((u32 *) blockbuf1)[j]);
+							if (err) {
+								return err;
+							}
+							inode.i_blocks--;
+						}
+					}
+					err = ext2_block_free(dev,
+							((u32 *) blockbuf0)[i]);
+					if (err) {
+						return err;
+					}
+					inode.i_blocks--;
+				}
+			}
+			err = ext2_block_free(dev, inode.i_block[14]);
+			if (err) {
+				return err;
+			}
+			inode.i_blocks--;
+			if (!inode.i_blocks) {
+				goto inodefree;
+			}
+		}
+inodefree:
+		err = ext2_inode_free(dev, inum);
+		if (err) {
+			return err;
+		}
+	} else {
+		inode.i_links_count--;
+		err = ext2_inode_write(dev, inum, &inode);
+		if (err) {
+			return err;
+		}
+	}
 
 	return 0;
 }
@@ -1754,9 +2385,9 @@ int ext2_root_umount()
 int ext2_file_rename()
 {
 
+
 	return 0;
 }
-
 
 int ext2_permission_check()
 {
@@ -1777,6 +2408,18 @@ int ext2_getattr()
 }
 
 int ext2_update_time()
+{
+
+	return 0;
+}
+
+int ext2_root_mount()
+{
+
+	return 0;
+}
+
+int ext2_root_umount()
 {
 
 	return 0;
