@@ -45,6 +45,33 @@ int memcmp(const void *s1, const void *s2, size_t n)
 	return 0;
 }
 
+size_t strlen(const char *s)
+{
+	size_t len = 0;
+	while (*s++) len++;
+	return len;
+}
+
+int strcmp(const char *s1, const char *s2)
+{
+	for (size_t i = 0; s1[i] || s2[i]; i++) {
+		if (s1[i] != s2[i]) {
+			return s1[i] - s2[i];
+		}
+	}
+	return 0;
+}
+
+char *strcpy(char *restrict dst, const char *restrict src)
+{
+	size_t i;
+	for (i = 0; src[i]; i++) {
+		dst[i] = src[i];
+	}
+	dst[i] = '\0';
+	return dst + i;
+}
+
 int copy_to_user(void *to, const void *from, size_t n)
 {
 	size_t firstvpage = PA_TO_PN(to);
@@ -117,12 +144,5 @@ int copy_from_user(void *to, const void *from, size_t n)
 	}
 
 	return 0;
-}
-
-size_t strlen(const char *s)
-{
-	size_t len = 0;
-	while (*s++) len++;
-	return len;
 }
 

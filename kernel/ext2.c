@@ -1853,7 +1853,7 @@ int ext2_regular_delete(ext2_blkdev_t *dev, u32 parent_inum, u32 inum,
 {
 	int err = 0;
 	size_t offset = 0;
-	char namebuf[NAME_MAX];
+	char namebuf[NAME_MAX + 1];
 	ext2_inode_t parent_inode, inode;
 	ext2_directory_entry_t direntry0, direntry1;
 	u8 blockbuf0[dev->block_size],
@@ -1889,7 +1889,8 @@ int ext2_regular_delete(ext2_blkdev_t *dev, u32 parent_inum, u32 inum,
 		if (err) {
 			return err;
 		}
-		if (direntry1.inode == inum && !memcmp(name, namebuf, direntry1.name_len)) {
+		namebuf[direntry1.name_len] = '\0';
+		if (direntry1.inode == inum && !strcmp(name, namebuf)) {
 			if (!(offset % dev->block_size)) {
 				direntry1.inode = 0;
 				err = ext2_file_write(dev, parent_inum, &direntry1,
@@ -2304,7 +2305,7 @@ int ext2_symlink_delete(ext2_blkdev_t *dev, u32 parent_inum, u32 inum,
 	int err = 0;
 	size_t offset = 0;
 	ext2_inode_t parent_inode, inode;
-	char namebuf[NAME_MAX];
+	char namebuf[NAME_MAX + 1];
 	ext2_directory_entry_t direntry0, direntry1;
 	u8 blockbuf0[dev->block_size],
 	blockbuf1[dev->block_size], blockbuf2[dev->block_size];
@@ -2338,7 +2339,8 @@ int ext2_symlink_delete(ext2_blkdev_t *dev, u32 parent_inum, u32 inum,
 		if (err) {
 			return err;
 		}
-		if (direntry1.inode == inum && !memcmp(name, namebuf, direntry1.name_len)) {
+		namebuf[direntry1.name_len] = '\0';
+		if (direntry1.inode == inum && !strcmp(name, namebuf)) {
 			if (!(offset % dev->block_size)) {
 				direntry1.inode = 0;
 				err = ext2_file_write(dev, parent_inum, &direntry1,

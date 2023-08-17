@@ -16,11 +16,11 @@ void debug_printint(i64 a0)
 
 /*
 	int err = ext2_regular_delete(list_next_entry(&ext2_dev_list, devlist),
-			2, 12);
+			2, 12, "file2");
 	if (err) {
 		kprintf_s("err %d\n", err);
-	}
-*/
+	}*/
+
 	/*
 	u32 inum;
 	int err = ext2_file_lookup(list_next_entry(&ext2_dev_list, devlist),
