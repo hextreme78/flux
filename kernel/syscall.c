@@ -6,38 +6,103 @@
 
 #include <kernel/ext2.h>
 
+int ext2_create_test(void)
+{
+	int err;
+	extern ext2_blkdev_t ext2_dev_list;
+	ext2_blkdev_t *dev = list_next_entry(&ext2_dev_list, devlist);
+	u16 mode = EXT2_S_IRUSR | EXT2_S_IWUSR | EXT2_S_IXUSR;
+	u16 uid = 1000;
+	u16 gid = 1000;
+	u32 regularinum;
+
+	err = ext2_regular_create(dev, 2, "regular", mode, uid, gid);
+	if (err) {
+		kprintf_s("ext2_regular_create() err %d\n", err);
+		return err;
+	}
+
+	err = ext2_file_lookup(dev, "/regular", &regularinum, 2, false);
+	if (err) {
+		kprintf_s("ext2_file_lookup() err %d\n", err);
+		return err;
+	}
+
+	err = ext2_hardlink_create(dev, 2, regularinum, "hardlink");
+	if (err) {
+		kprintf_s("ext2_hardlink_create() err %d\n", err);
+		return err;
+	}
+
+	err = ext2_directory_create(dev, 2, "directory", mode, uid, gid);
+	if (err) {
+		kprintf_s("ext2_directory_create() err %d\n", err);
+		return err;
+	}
+
+	err = ext2_symlink_create(dev, 2, "symlink", mode, uid, gid, "./directory");
+	if (err) {
+		kprintf_s("ext2_symlink_create() err %d\n", err);
+		return err;
+	}
+
+	return 0;
+}
+
+int ext2_delete_test(void)
+{
+	int err;
+	extern ext2_blkdev_t ext2_dev_list;
+	ext2_blkdev_t *dev = list_next_entry(&ext2_dev_list, devlist);
+
+	err = ext2_file_delete(dev, 2, "regular");
+	if (err) {
+		kprintf_s("1 ext2_regular_delete() err %d\n", err);
+		return err;
+	}
+
+	err = ext2_file_delete(dev, 2, "hardlink");
+	if (err) {
+		kprintf_s("2 ext2_regular_delete() err %d\n", err);
+		return err;
+	}
+
+	err = ext2_file_delete(dev, 2, "directory");
+	if (err) {
+		kprintf_s("ext2_directory_delete() err %d\n", err);
+		return err;
+	}
+
+	err = ext2_file_delete(dev, 2, "symlink");
+	if (err) {
+		kprintf_s("ext2_symlink_delete() err %d\n", err);
+		return err;
+	}
+
+	return 0;
+}
+
+int ext2_move_test(void)
+{
+	int err;
+	extern ext2_blkdev_t ext2_dev_list;
+	ext2_blkdev_t *dev = list_next_entry(&ext2_dev_list, devlist);
+
+	err = ext2_file_rename(dev, "/regular", "directory/", 2);
+	if (err) {
+		kprintf_s("ext2_file_rename() err %d\n", err);
+		return err;
+	}
+
+	return 0;
+}
+
 void debug_printint(i64 a0)
 {
+	ext2_create_test();
+	ext2_move_test();
+
 	kprintf_s("debug_printint %d\n", a0);
-
-	extern ext2_blkdev_t ext2_dev_list;
-//	ext2_inode_t inode;
-//	ext2_inode_read(list_next_entry(&ext2_dev_list, devlist), 2, &inode);
-
-/*
-	int err = ext2_regular_delete(list_next_entry(&ext2_dev_list, devlist),
-			2, 12, "file2");
-	if (err) {
-		kprintf_s("err %d\n", err);
-	}*/
-
-	/*
-	u32 inum;
-	int err = ext2_file_lookup(list_next_entry(&ext2_dev_list, devlist),
-			"/file", &inum, 0, true);
-	if (err) {
-		kprintf_s("err %d\n", err);
-	}
-	kprintf_s("inum %d\n", inum);
-*/
-/*
-	int err = ext2_hardlink_create(list_next_entry(&ext2_dev_list, devlist),
-			2, 12, "hardlink");
-	if (err) {
-		kprintf_s("err %d\n", err);
-	}
-*/
-	//ext2_file_write(list_next_entry(&ext2_dev_list, devlist), 12, "Hello", 5, 0);
 }
 
 void syscall(void)

@@ -33,6 +33,48 @@ typedef struct ext2_directory_entry ext2_directory_entry_t;
 		size; \
 	})
 
+#define EXT2_FTTYPE_TO_STYPE(filetype) \
+	({ \
+	 	u16 ret = 0; \
+		if ((filetype) == EXT2_FT_REG_FILE) { \
+			ret = EXT2_S_IFREG; \
+	 	} else if ((filetype) == EXT2_FT_DIR) { \
+			ret = EXT2_S_IFDIR; \
+	 	} else if ((filetype) == EXT2_FT_CHRDEV) { \
+			ret = EXT2_S_IFCHR; \
+	 	} else if ((filetype) == EXT2_FT_BLKDEV) { \
+			ret = EXT2_S_IFBLK; \
+	 	} else if ((filetype) == EXT2_FT_FIFO) { \
+			ret = EXT2_S_IFIFO; \
+	 	} else if ((filetype) == EXT2_FT_SOCK) { \
+			ret = EXT2_S_IFSOCK; \
+	 	} else if ((filetype) == EXT2_FT_SYMLINK) { \
+			ret = EXT2_S_IFLNK; \
+		} \
+		ret; \
+	})
+
+#define EXT2_STYPE_TO_FTTYPE(filetype) \
+	({ \
+	 	u8 ret = 0; \
+		if ((filetype) == EXT2_S_IFREG) { \
+			ret = EXT2_FT_REG_FILE; \
+	 	} else if ((filetype) == EXT2_S_IFDIR) { \
+			ret = EXT2_FT_DIR; \
+	 	} else if ((filetype) == EXT2_S_IFCHR) { \
+			ret = EXT2_FT_CHRDEV; \
+	 	} else if ((filetype) == EXT2_S_IFBLK) { \
+			ret = EXT2_FT_BLKDEV; \
+	 	} else if ((filetype) == EXT2_S_IFIFO) { \
+			ret = EXT2_FT_FIFO; \
+	 	} else if ((filetype) == EXT2_S_IFSOCK) { \
+			ret = EXT2_FT_SOCK; \
+	 	} else if ((filetype) == EXT2_S_IFLNK) { \
+			ret = EXT2_FT_SYMLINK; \
+		} \
+		ret; \
+	})
+
 #define EXT2_SUPERBLOCK_START 1024
 
 #define EXT2_SUPER_MAGIC 0xef53

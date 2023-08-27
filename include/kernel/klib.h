@@ -19,5 +19,8 @@ char *strcpy(char *restrict dst, const char *restrict src);
 int copy_to_user(void *to, const void *from, size_t n);
 int copy_from_user(void *to, const void *from, size_t n);
 
+char *basename(char *path);
+char *dirname(char *path);
+
 #endif
 

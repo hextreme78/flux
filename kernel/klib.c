@@ -146,3 +146,51 @@ int copy_from_user(void *to, const void *from, size_t n)
 	return 0;
 }
 
+char *basename(char *path)
+{
+	size_t i = 0;
+	if (!path || !path[0]) {
+		return ".";
+	}
+	i = strlen(path);
+	while (i && path[i] == '/') i--;
+	path[i + 1] = '\0';
+	while (i && path[i - 1] != '/') i--;
+	return path + i;
+}
+
+char *dirname(char *path)
+{
+	size_t i;
+	if (!path || !path[0]) {
+		return ".";
+	}
+	i = strlen(path) - 1;
+	while (path[i] == '/') {
+		if (!i) {
+			return "/";
+		}
+		i--;
+	}
+	while (path[i] != '/') {
+		if (!i) {
+			return ".";
+		}
+		i--;
+	}
+	while (path[i] == '/') {
+		if (!i) {
+			return "/";
+		}
+		i--;
+	}
+	path[i + 1] = '\0';
+	return path;
+}
+
+bool path_check_trailing_slash()
+{
+
+	return false;
+}
+

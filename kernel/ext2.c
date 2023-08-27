@@ -1091,14 +1091,183 @@ int ext2_file_write(ext2_blkdev_t *dev, u32 inum, void *buf, u64 len, u64 offset
 	return 0;
 }
 
+int ext2_direntry_inum_by_name(ext2_blkdev_t *dev, u32 dirinum,
+		const char *name, u32 *inum)
+{
+	int err;
+	size_t offset = 0;
+	u8 direntrybuf0[sizeof(ext2_directory_entry_t) + NAME_MAX];
+	ext2_directory_entry_t *direntry = (void *) &direntrybuf0;
+	size_t namelen = strlen(name);
+
+	while (1) {
+		err = ext2_file_read(dev, dirinum, direntry, sizeof(*direntry),
+				offset);
+		if (err == -EIO) {
+			return -ENOENT;
+		} else if (err) {
+			return err;
+		}
+
+		err = ext2_file_read(dev, dirinum, direntry->name, direntry->name_len,
+				offset + sizeof(*direntry));
+		if (err) {
+			return err;
+		}
+
+		if (namelen == direntry->name_len &&
+				!memcmp(name, direntry->name, namelen)) {
+			*inum = direntry->inode;
+			break;
+		}
+
+		offset += direntry->rec_len;
+	}
+
+	return 0;
+}
+
+int ext2_direntry_create(ext2_blkdev_t *dev, u32 dirinum,
+		u32 inum, const char *name, u8 filetype)
+{
+	int err;
+	size_t offset = 0;
+	u8 direntrybuf0[sizeof(ext2_directory_entry_t) + NAME_MAX];
+	ext2_directory_entry_t *direntry = (void *) &direntrybuf0;
+	size_t namelen = strlen(name);
+	u32 tmp;
+
+	err = ext2_direntry_inum_by_name(dev, dirinum, name, &tmp);
+	if (err != -ENOENT) {
+		return err;
+	}
+
+	while (1) {
+		err = ext2_file_read(dev, dirinum, direntry, sizeof(*direntry),
+				offset);
+		if (err == -EIO) {
+			/* create new direntry */
+			char blockbuf[dev->block_size];
+			err = ext2_file_write(dev, dirinum, blockbuf,
+					dev->block_size, offset);
+			if (err) {
+				return err;
+			}
+			direntry->inode = inum;
+			direntry->rec_len = dev->block_size;
+			direntry->name_len = namelen;
+			memcpy(direntry->name, name, namelen);
+			direntry->file_type = filetype;
+			err = ext2_file_write(dev, dirinum, direntry,
+					sizeof(*direntry) + namelen, offset);
+			if (err) {
+				return err;
+			}
+			break;
+		} else if (err) {
+			return err;
+		}
+
+		/* if direntry is unused */
+		if (!direntry->inode && direntry->rec_len >=
+				sizeof(*direntry) + namelen) {
+			direntry->inode = inum;
+			direntry->name_len = namelen;
+			memcpy(direntry->name, name, namelen);
+			direntry->file_type = filetype;
+			err = ext2_file_write(dev, dirinum, direntry,
+					sizeof(*direntry) + namelen, offset);
+			if (err) {
+				return err;
+			}
+			break;
+		}
+
+		/* try to split direntry */
+		size_t left_rec_len = sizeof(*direntry) + direntry->name_len;
+		left_rec_len = (offset + left_rec_len) % 4 ?
+			left_rec_len + 4 - (offset + left_rec_len) % 4 :
+			left_rec_len;
+		size_t right_rec_len = direntry->rec_len - left_rec_len;
+		if (right_rec_len >= sizeof(*direntry) + namelen) {
+			direntry->rec_len = left_rec_len;
+			err = ext2_file_write(dev, dirinum, direntry,
+					sizeof(*direntry), offset);
+			if (err) {
+				return err;
+			}
+			direntry->rec_len = right_rec_len;
+			direntry->inode = inum;
+			direntry->name_len = namelen;
+			memcpy(direntry->name, name, namelen);
+			direntry->file_type = filetype;
+			err = ext2_file_write(dev, dirinum, direntry,
+					sizeof(*direntry) + namelen,
+					offset + left_rec_len);
+			if (err) {
+				return err;
+			}
+			break;
+		}
+
+		offset += direntry->rec_len;
+	}
+
+	return 0;
+}
+
+int ext2_direntry_delete(ext2_blkdev_t *dev, u32 dirinum, const char *name)
+{
+	int err;
+	size_t offset = 0;
+	ext2_directory_entry_t direntry0, direntry1;
+	char namebuf[NAME_MAX + 1];
+	while (1) {
+		err = ext2_file_read(dev, dirinum, &direntry1,
+				sizeof(direntry1), offset);
+		if (err) {
+			return err;
+		}
+		err = ext2_file_read(dev, dirinum, namebuf,
+				direntry1.name_len, offset + sizeof(direntry1));
+		if (err) {
+			return err;
+		}
+		namebuf[direntry1.name_len] = '\0';
+		if (!strcmp(name, namebuf)) {
+			if (!(offset % dev->block_size)) {
+				direntry1.inode = 0;
+				err = ext2_file_write(dev, dirinum, &direntry1,
+						sizeof(direntry1), offset);
+				if (err) {
+					return err;
+				}
+			} else {
+				u16 rec_len = direntry0.rec_len;
+				direntry0.rec_len += direntry1.rec_len;
+				err = ext2_file_write(dev, dirinum, &direntry0,
+						sizeof(direntry0),
+						offset - rec_len);
+				if (err) {
+					return err;
+				}
+			}
+
+			break;
+		}
+
+		offset += direntry1.rec_len;
+		direntry0 = direntry1;
+	}
+
+	return 0;
+}
+
 int ext2_regular_create(ext2_blkdev_t *dev, u32 parent_inum, const char *name,
 		u16 mode, u16 uid, u16 gid)
 {
 	int err = 0;
-	size_t offset = 0;
 	ext2_inode_t parent_inode, inode;
-	u8 direntry_buf[sizeof(ext2_directory_entry_t) + NAME_MAX];
-	ext2_directory_entry_t *direntry = (void *) &direntry_buf;
 	size_t namelen = strlen(name);
 	u32 inum;
 
@@ -1138,103 +1307,19 @@ int ext2_regular_create(ext2_blkdev_t *dev, u32 parent_inum, const char *name,
 		return -ENOTDIR;
 	}
 
-	while (1) {
-		err = ext2_file_read(dev, parent_inum, direntry, sizeof(*direntry),
-				offset);
-		if (err == -EIO) {
-			/* create new direntry */
-			err = ext2_inode_allocate(dev, &inum);
-			if (err) {
-				return err;
-			}
-			direntry->inode = inum;
-			direntry->rec_len = dev->block_size;
-			direntry->name_len = namelen;
-			memcpy(direntry->name, name, namelen);
-			direntry->file_type = EXT2_FT_REG_FILE;
+	err = ext2_inode_allocate(dev, &inum);
+	if (err) {
+		return err;
+	}
 
-			err = ext2_file_write(dev, parent_inum, direntry,
-					sizeof(*direntry) + namelen, offset);
-			if (err) {
-				return err;
-			}
+	err = ext2_direntry_create(dev, parent_inum, inum, name, EXT2_FT_REG_FILE);
+	if (err) {
+		return err;
+	}
 
-			err = ext2_inode_write(dev, inum, &inode);
-			if (err) {
-				return err;
-			}
-
-			return 0;
-		} else if (err) {
-			return err;
-		}
-
-		/* if direntry is unused */
-		if (!direntry->inode && direntry->rec_len >=
-				sizeof(*direntry) + namelen) {
-			err = ext2_inode_allocate(dev, &inum);
-			if (err) {
-				return err;
-			}
-			direntry->inode = inum;
-			direntry->name_len = namelen;
-			memcpy(direntry->name, name, namelen);
-			direntry->file_type = EXT2_FT_REG_FILE;
-
-			err = ext2_file_write(dev, parent_inum, direntry,
-					sizeof(*direntry) + namelen, offset);
-			if (err) {
-				return err;
-			}
-
-			err = ext2_inode_write(dev, inum, &inode);
-			if (err) {
-				return err;
-			}
-
-			return 0;
-		}
-
-		/* try to split direntry */
-		size_t left_rec_len = sizeof(*direntry) + direntry->name_len;
-		left_rec_len = (offset + left_rec_len) % 4 ?
-			left_rec_len + 4 - (offset + left_rec_len) % 4 :
-			left_rec_len;
-		size_t right_rec_len = direntry->rec_len - left_rec_len;
-		if (right_rec_len >= sizeof(*direntry) + namelen) {
-			direntry->rec_len = left_rec_len;
-			err = ext2_file_write(dev, parent_inum, direntry,
-					sizeof(*direntry), offset);
-			if (err) {
-				return err;
-			}
-
-			err = ext2_inode_allocate(dev, &inum);
-			if (err) {
-				return err;
-			}
-			direntry->rec_len = right_rec_len;
-			direntry->inode = inum;
-			direntry->name_len = namelen;
-			memcpy(direntry->name, name, namelen);
-			direntry->file_type = EXT2_FT_REG_FILE;
-
-			err = ext2_file_write(dev, parent_inum, direntry,
-					sizeof(*direntry) + namelen,
-					offset + left_rec_len);
-			if (err) {
-				return err;
-			}
-
-			err = ext2_inode_write(dev, inum, &inode);
-			if (err) {
-				return err;
-			}
-
-			return 0;
-		}
-
-		offset += direntry->rec_len;
+	err = ext2_inode_write(dev, inum, &inode);
+	if (err) {
+		return err;
 	}
 
 	return 0;
@@ -1243,10 +1328,7 @@ int ext2_regular_create(ext2_blkdev_t *dev, u32 parent_inum, const char *name,
 int ext2_hardlink_create(ext2_blkdev_t *dev, u32 parent_inum, u32 inum, const char *name)
 {
 	int err = 0;
-	size_t offset = 0;
 	ext2_inode_t parent_inode, inode;
-	u8 direntry_buf[sizeof(ext2_directory_entry_t) + NAME_MAX];
-	ext2_directory_entry_t *direntry = (void *) &direntry_buf;
 	size_t namelen = strlen(name);
 
 	if (namelen > NAME_MAX) {
@@ -1274,93 +1356,17 @@ int ext2_hardlink_create(ext2_blkdev_t *dev, u32 parent_inum, u32 inum, const ch
 	if ((inode.i_mode & EXT2_FILE_FORMAT_MASK) == EXT2_S_IFDIR) {
 		return -EINVAL;
 	}
+
+	err = ext2_direntry_create(dev, parent_inum, inum, name,
+			EXT2_STYPE_TO_FTTYPE(inode.i_mode & EXT2_FILE_FORMAT_MASK));
+	if (err) {
+		return err;
+	}
+
 	inode.i_links_count++;
-
-	while (1) {
-		err = ext2_file_read(dev, parent_inum, direntry, sizeof(*direntry),
-				offset);
-		if (err == -EIO) {
-			/* create new direntry */
-			direntry->inode = inum;
-			direntry->rec_len = dev->block_size;
-			direntry->name_len = namelen;
-			memcpy(direntry->name, name, namelen);
-			direntry->file_type = EXT2_FT_REG_FILE;
-
-			err = ext2_file_write(dev, parent_inum, direntry,
-					sizeof(*direntry) + namelen, offset);
-			if (err) {
-				return err;
-			}
-
-			err = ext2_inode_write(dev, inum, &inode);
-			if (err) {
-				return err;
-			}
-
-			return 0;
-		} else if (err) {
-			return err;
-		}
-
-		/* if direntry is unused */
-		if (!direntry->inode && direntry->rec_len >=
-				sizeof(*direntry) + namelen) {
-			direntry->inode = inum;
-			direntry->name_len = namelen;
-			memcpy(direntry->name, name, namelen);
-			direntry->file_type = EXT2_FT_REG_FILE;
-
-			err = ext2_file_write(dev, parent_inum, direntry,
-					sizeof(*direntry) + namelen, offset);
-			if (err) {
-				return err;
-			}
-
-			err = ext2_inode_write(dev, inum, &inode);
-			if (err) {
-				return err;
-			}
-
-			return 0;
-		}
-
-		/* try to split direntry */
-		size_t left_rec_len = sizeof(*direntry) + direntry->name_len;
-		left_rec_len = (offset + left_rec_len) % 4 ?
-			left_rec_len + 4 - (offset + left_rec_len) % 4 :
-			left_rec_len;
-		size_t right_rec_len = direntry->rec_len - left_rec_len;
-		if (right_rec_len >= sizeof(*direntry) + namelen) {
-			direntry->rec_len = left_rec_len;
-			err = ext2_file_write(dev, parent_inum, direntry,
-					sizeof(*direntry), offset);
-			if (err) {
-				return err;
-			}
-
-			direntry->rec_len = right_rec_len;
-			direntry->inode = inum;
-			direntry->name_len = namelen;
-			memcpy(direntry->name, name, namelen);
-			direntry->file_type = EXT2_FT_REG_FILE;
-
-			err = ext2_file_write(dev, parent_inum, direntry,
-					sizeof(*direntry) + namelen,
-					offset + left_rec_len);
-			if (err) {
-				return err;
-			}
-
-			err = ext2_inode_write(dev, inum, &inode);
-			if (err) {
-				return err;
-			}
-
-			return 0;
-		}
-
-		offset += direntry->rec_len;
+	err = ext2_inode_write(dev, inum, &inode);
+	if (err) {
+		return err;
 	}
 
 	return 0;
@@ -1370,10 +1376,7 @@ int ext2_directory_create(ext2_blkdev_t *dev, u32 parent_inum, const char *name,
 		u16 mode, u16 uid, u16 gid)
 {
 	int err = 0;
-	size_t offset = 0;
 	ext2_inode_t parent_inode, inode;
-	u8 direntry_buf[sizeof(ext2_directory_entry_t) + NAME_MAX];
-	ext2_directory_entry_t *direntry = (void *) &direntry_buf;
 	size_t namelen = strlen(name);
 	u32 inum;
 
@@ -1412,137 +1415,30 @@ int ext2_directory_create(ext2_blkdev_t *dev, u32 parent_inum, const char *name,
 	if ((parent_inode.i_mode & EXT2_FILE_FORMAT_MASK) != EXT2_S_IFDIR) {
 		return -ENOTDIR;
 	}
-
-	while (1) {
-		err = ext2_file_read(dev, parent_inum, direntry, sizeof(*direntry),
-				offset);
-		if (err == -EIO) {
-			/* create new direntry */
-			err = ext2_inode_allocate(dev, &inum);
-			if (err) {
-				return err;
-			}
-			direntry->inode = inum;
-			direntry->rec_len = dev->block_size;
-			direntry->name_len = namelen;
-			memcpy(direntry->name, name, namelen);
-			direntry->file_type = EXT2_FT_DIR;
-
-			err = ext2_file_write(dev, parent_inum, direntry,
-					sizeof(*direntry) + namelen, offset);
-			if (err) {
-				return err;
-			}
-
-			err = ext2_inode_write(dev, inum, &inode);
-			if (err) {
-				return err;
-			}
-
-			break;
-		} else if (err) {
-			return err;
-		}
-
-		/* if direntry is unused */
-		if (!direntry->inode && direntry->rec_len >=
-				sizeof(*direntry) + namelen) {
-			err = ext2_inode_allocate(dev, &inum);
-			if (err) {
-				return err;
-			}
-			direntry->inode = inum;
-			direntry->name_len = namelen;
-			memcpy(direntry->name, name, namelen);
-			direntry->file_type = EXT2_FT_DIR;
-
-			err = ext2_file_write(dev, parent_inum, direntry,
-					sizeof(*direntry) + namelen, offset);
-			if (err) {
-				return err;
-			}
-
-			err = ext2_inode_write(dev, inum, &inode);
-			if (err) {
-				return err;
-			}
-
-			break;
-		}
-
-		/* try to split direntry */
-		size_t left_rec_len = sizeof(*direntry) + direntry->name_len;
-		left_rec_len = (offset + left_rec_len) % 4 ?
-			left_rec_len + 4 - (offset + left_rec_len) % 4 :
-			left_rec_len;
-		size_t right_rec_len = direntry->rec_len - left_rec_len;
-		if (right_rec_len >= sizeof(*direntry) + namelen) {
-			direntry->rec_len = left_rec_len;
-			err = ext2_file_write(dev, parent_inum, direntry,
-					sizeof(*direntry), offset);
-			if (err) {
-				return err;
-			}
-
-			err = ext2_inode_allocate(dev, &inum);
-			if (err) {
-				return err;
-			}
-			direntry->rec_len = right_rec_len;
-			direntry->inode = inum;
-			direntry->name_len = namelen;
-			memcpy(direntry->name, name, namelen);
-			direntry->file_type = EXT2_FT_DIR;
-
-			err = ext2_file_write(dev, parent_inum, direntry,
-					sizeof(*direntry) + namelen,
-					offset + left_rec_len);
-			if (err) {
-				return err;
-			}
-
-			err = ext2_inode_write(dev, inum, &inode);
-			if (err) {
-				return err;
-			}
-
-			break;
-		}
-
-		offset += direntry->rec_len;
+	
+	err = ext2_inode_allocate(dev, &inum);
+	if (err) {
+		return err;
 	}
 
-	char zerobuf[dev->block_size];
-	bzero(zerobuf, dev->block_size);
+	err = ext2_direntry_create(dev, parent_inum, inum, name, EXT2_FT_DIR);
+	if (err) {
+		return err;
+	}
 
-	/* write zeroes to block */
-	err = ext2_file_write(dev, inum, zerobuf,
-			dev->block_size, 0);
+	err = ext2_inode_write(dev, inum, &inode);
 	if (err) {
 		return err;
 	}
 
 	/* create direntry for . */
-	direntry->inode = inum;
-	direntry->rec_len = 12;
-	direntry->name_len = 1;
-	direntry->file_type = EXT2_FT_DIR;
-	direntry->name[0] = '.';
-	err = ext2_file_write(dev, inum, direntry,
-			sizeof(*direntry) + 1, 0);
+	err = ext2_direntry_create(dev, inum, inum, ".", EXT2_FT_DIR);
 	if (err) {
 		return err;
 	}
 
 	/* create direntry for .. */
-	direntry->inode = parent_inum;
-	direntry->rec_len = dev->block_size - 12;
-	direntry->name_len = 2;
-	direntry->file_type = EXT2_FT_DIR;
-	direntry->name[0] = '.';
-	direntry->name[1] = '.';
-	err = ext2_file_write(dev, inum, direntry,
-			sizeof(*direntry) + 2, 12);
+	err = ext2_direntry_create(dev, inum, parent_inum, "..", EXT2_FT_DIR);
 	if (err) {
 		return err;
 	}
@@ -1576,10 +1472,7 @@ int ext2_symlink_create(ext2_blkdev_t *dev, u32 parent_inum, const char *name,
 		u16 mode, u16 uid, u16 gid, const char *symlink)
 {
 	int err = 0;
-	size_t offset = 0;
 	ext2_inode_t parent_inode, inode;
-	u8 direntry_buf[sizeof(ext2_directory_entry_t) + NAME_MAX];
-	ext2_directory_entry_t *direntry = (void *) &direntry_buf;
 	size_t namelen = strlen(name);
 	size_t linklen = strlen(symlink);
 	u32 inum;
@@ -1602,7 +1495,7 @@ int ext2_symlink_create(ext2_blkdev_t *dev, u32 parent_inum, const char *name,
 	inode.i_dir_acl = 0;
 	inode.i_faddr = 0;
 	bzero(inode.i_osd2, 12);
-	
+
 	if (namelen > NAME_MAX || linklen + 1 > PATH_MAX) {
 		return -ENAMETOOLONG;
 	}
@@ -1620,103 +1513,19 @@ int ext2_symlink_create(ext2_blkdev_t *dev, u32 parent_inum, const char *name,
 		return -ENOTDIR;
 	}
 
-	while (1) {
-		err = ext2_file_read(dev, parent_inum, direntry, sizeof(*direntry),
-				offset);
-		if (err == -EIO) {
-			/* create new direntry */
-			err = ext2_inode_allocate(dev, &inum);
-			if (err) {
-				return err;
-			}
-			direntry->inode = inum;
-			direntry->rec_len = dev->block_size;
-			direntry->name_len = namelen;
-			memcpy(direntry->name, name, namelen);
-			direntry->file_type = EXT2_FT_SYMLINK;
+	err = ext2_inode_allocate(dev, &inum);
+	if (err) {
+		return err;
+	}
 
-			err = ext2_file_write(dev, parent_inum, direntry,
-					sizeof(*direntry) + namelen, offset);
-			if (err) {
-				return err;
-			}
+	err = ext2_direntry_create(dev, parent_inum, inum, name, EXT2_FT_SYMLINK);
+	if (err) {
+		return err;
+	}
 
-			err = ext2_inode_write(dev, inum, &inode);
-			if (err) {
-				return err;
-			}
-
-			break;
-		} else if (err) {
-			return err;
-		}
-
-		/* if direntry is unused */
-		if (!direntry->inode && direntry->rec_len >=
-				sizeof(*direntry) + namelen) {
-			err = ext2_inode_allocate(dev, &inum);
-			if (err) {
-				return err;
-			}
-			direntry->inode = inum;
-			direntry->name_len = namelen;
-			memcpy(direntry->name, name, namelen);
-			direntry->file_type = EXT2_FT_SYMLINK;
-
-			err = ext2_file_write(dev, parent_inum, direntry,
-					sizeof(*direntry) + namelen, offset);
-			if (err) {
-				return err;
-			}
-
-			err = ext2_inode_write(dev, inum, &inode);
-			if (err) {
-				return err;
-			}
-
-			break;
-		}
-
-		/* try to split direntry */
-		size_t left_rec_len = sizeof(*direntry) + direntry->name_len;
-		left_rec_len = (offset + left_rec_len) % 4 ?
-			left_rec_len + 4 - (offset + left_rec_len) % 4 :
-			left_rec_len;
-		size_t right_rec_len = direntry->rec_len - left_rec_len;
-		if (right_rec_len >= sizeof(*direntry) + namelen) {
-			direntry->rec_len = left_rec_len;
-			err = ext2_file_write(dev, parent_inum, direntry,
-					sizeof(*direntry), offset);
-			if (err) {
-				return err;
-			}
-
-			err = ext2_inode_allocate(dev, &inum);
-			if (err) {
-				return err;
-			}
-			direntry->rec_len = right_rec_len;
-			direntry->inode = inum;
-			direntry->name_len = namelen;
-			memcpy(direntry->name, name, namelen);
-			direntry->file_type = EXT2_FT_SYMLINK;
-
-			err = ext2_file_write(dev, parent_inum, direntry,
-					sizeof(*direntry) + namelen,
-					offset + left_rec_len);
-			if (err) {
-				return err;
-			}
-
-			err = ext2_inode_write(dev, inum, &inode);
-			if (err) {
-				return err;
-			}
-
-			break;
-		}
-
-		offset += direntry->rec_len;
+	err = ext2_inode_write(dev, inum, &inode);
+	if (err) {
+		return err;
 	}
 
 	/* For all symlink shorter than 60 bytes long,
@@ -1751,15 +1560,20 @@ int ext2_file_lookup(ext2_blkdev_t *dev, const char *path, u32 *inum, u32 relinu
 	char name[NAME_MAX];
 	u8 direntry_buf[sizeof(ext2_directory_entry_t) + NAME_MAX];
 	ext2_directory_entry_t *direntry = (void *) &direntry_buf;
+	size_t pathlen = strlen(path);
 
-	if (strlen(path) + 1 > PATH_MAX) {
+	if (pathlen + 1 > PATH_MAX) {
 		return -ENAMETOOLONG;
+	}
+
+	if (!pathlen) {
+		return -EINVAL;
 	}
 
 	if (path[0] == '/') {
 		/* absolute path */
 		curinum = EXT2_ROOT_INODE;
-		i++;
+		while (path[i] == '/') i++;
 	} else {
 		/* relative path */
 		curinum = relinum;
@@ -1773,14 +1587,12 @@ int ext2_file_lookup(ext2_blkdev_t *dev, const char *path, u32 *inum, u32 relinu
 	while (path[i]) {
 		size_t offset = 0;
 		size_t j = 0;
-		while (path[i] != '/' && path[i] != '\0') {
+		while (path[i] != '/' && path[i]) {
 			name[j] = path[i];
 			i++;
 			j++;
 		}
-		if (path[i] == '/') {
-			i++;
-		}
+		while (path[i] == '/') i++;
 
 		if ((curinode.i_mode & EXT2_FILE_FORMAT_MASK) != EXT2_S_IFDIR) {
 			return -ENOTDIR;
@@ -1814,7 +1626,7 @@ int ext2_file_lookup(ext2_blkdev_t *dev, const char *path, u32 *inum, u32 relinu
 				}
 
 				if ((path[i] || followlink) &&
-						(curinode.i_mode & EXT2_FILE_FORMAT_MASK) ==
+					(curinode.i_mode & EXT2_FILE_FORMAT_MASK) ==
 						EXT2_S_IFLNK) {
 					char linkpath[curinode.i_size + 1];
 					err = ext2_symlink_read(dev, curinum,
@@ -1848,21 +1660,13 @@ int ext2_file_lookup(ext2_blkdev_t *dev, const char *path, u32 *inum, u32 relinu
 	return 0;
 }
 
-int ext2_regular_delete(ext2_blkdev_t *dev, u32 parent_inum, u32 inum,
-		const char *name)
+int ext2_regular_delete(ext2_blkdev_t *dev, u32 parent_inum, const char *name)
 {
 	int err = 0;
-	size_t offset = 0;
-	char namebuf[NAME_MAX + 1];
 	ext2_inode_t parent_inode, inode;
-	ext2_directory_entry_t direntry0, direntry1;
 	u8 blockbuf0[dev->block_size],
 	blockbuf1[dev->block_size], blockbuf2[dev->block_size];
-
-	err = ext2_inode_read(dev, inum, &inode);
-	if (err) {
-		return err;
-	}
+	u32 inum;
 
 	err = ext2_inode_read(dev, parent_inum, &parent_inode);
 	if (err) {
@@ -1872,48 +1676,24 @@ int ext2_regular_delete(ext2_blkdev_t *dev, u32 parent_inum, u32 inum,
 	if ((parent_inode.i_mode & EXT2_FILE_FORMAT_MASK) != EXT2_S_IFDIR) {
 		return -ENOTDIR;
 	}
-	
+
+	err = ext2_direntry_inum_by_name(dev, parent_inum, name, &inum);
+	if (err) {
+		return err;
+	}
+
+	err = ext2_inode_read(dev, inum, &inode);
+	if (err) {
+		return err;
+	}
+
 	if ((inode.i_mode & EXT2_FILE_FORMAT_MASK) != EXT2_S_IFREG) {
 		return -EINVAL;
 	}
 
-	/* delete direntry */
-	while (1) {
-		err = ext2_file_read(dev, parent_inum, &direntry1,
-				sizeof(direntry1), offset);
-		if (err) {
-			return err;
-		}
-		err = ext2_file_read(dev, parent_inum, namebuf,
-				direntry1.name_len, offset + sizeof(direntry1));
-		if (err) {
-			return err;
-		}
-		namebuf[direntry1.name_len] = '\0';
-		if (direntry1.inode == inum && !strcmp(name, namebuf)) {
-			if (!(offset % dev->block_size)) {
-				direntry1.inode = 0;
-				err = ext2_file_write(dev, parent_inum, &direntry1,
-						sizeof(direntry1), offset);
-				if (err) {
-					return err;
-				}
-			} else {
-				u16 rec_len = direntry0.rec_len;
-				direntry0.rec_len += direntry1.rec_len;
-				err = ext2_file_write(dev, parent_inum, &direntry0,
-						sizeof(direntry0),
-						offset - rec_len);
-				if (err) {
-					return err;
-				}
-			}
-
-			break;
-		}
-
-		offset += direntry1.rec_len;
-		direntry0 = direntry1;
+	err = ext2_direntry_delete(dev, parent_inum, name);
+	if (err) {
+		return err;
 	}
 
 	/* delete file */
@@ -2069,83 +1849,62 @@ inodefree:
 	return 0;
 }
 
-int ext2_directory_delete(ext2_blkdev_t *dev, u32 parent_inum, u32 inum)
+int ext2_directory_delete(ext2_blkdev_t *dev, u32 parent_inum, const char *name)
 {
 	int err = 0;
 	size_t offset = 0;
 	ext2_inode_t parent_inode, inode;
-	ext2_directory_entry_t direntry0, direntry1;
+	ext2_directory_entry_t direntry;
 	u8 blockbuf0[dev->block_size],
 	blockbuf1[dev->block_size], blockbuf2[dev->block_size];
-
-	err = ext2_inode_read(dev, inum, &inode);
-	if (err) {
-		return err;
-	}
+	u32 inum;
 
 	err = ext2_inode_read(dev, parent_inum, &parent_inode);
 	if (err) {
 		return err;
 	}
 
+	if ((parent_inode.i_mode & EXT2_FILE_FORMAT_MASK) != EXT2_S_IFDIR) {
+		return -ENOTDIR;
+	}
+
+	err = ext2_direntry_inum_by_name(dev, parent_inum, name, &inum);
+	if (err) {
+		return err;
+	}
+
+	err = ext2_inode_read(dev, inum, &inode);
+	if (err) {
+		return err;
+	}
+
 	/* directory should contain only . and .. entries */
-	err = ext2_file_read(dev, inum, &direntry1,
-			sizeof(direntry1), offset);
+	err = ext2_file_read(dev, inum, &direntry,
+			sizeof(direntry), offset);
 	if (err) {
 		return err;
 	}
-	offset += direntry1.rec_len;
-	err = ext2_file_read(dev, inum, &direntry1,
-			sizeof(direntry1), offset);
+	offset += direntry.rec_len;
+	err = ext2_file_read(dev, inum, &direntry,
+			sizeof(direntry), offset);
 	if (err) {
 		return err;
 	}
-	offset += direntry1.rec_len;
-	err = ext2_file_read(dev, inum, &direntry1,
-			sizeof(direntry1), offset);
+	offset += direntry.rec_len;
+	err = ext2_file_read(dev, inum, &direntry,
+			sizeof(direntry), offset);
 	if (err != -EIO) {
 		return -ENOTEMPTY;
 	}
 	offset = 0;
 
-	if ((parent_inode.i_mode & EXT2_FILE_FORMAT_MASK) != EXT2_S_IFDIR) {
-		return -ENOTDIR;
-	}
 	if ((inode.i_mode & EXT2_FILE_FORMAT_MASK) != EXT2_S_IFDIR) {
 		return -EINVAL;
 	}
 
-	/* delete direntry */
-	while (1) {
-		err = ext2_file_read(dev, parent_inum, &direntry1,
-				sizeof(direntry1), offset);
-		if (err) {
-			return err;
-		}
-		if (direntry1.inode == inum) {
-			if (!(offset % dev->block_size)) {
-				direntry1.inode = 0;
-				err = ext2_file_write(dev, parent_inum, &direntry1,
-						sizeof(direntry1), offset);
-				if (err) {
-					return err;
-				}
-			} else {
-				u16 rec_len = direntry0.rec_len;
-				direntry0.rec_len += direntry1.rec_len;
-				err = ext2_file_write(dev, parent_inum, &direntry0,
-						sizeof(direntry0),
-						offset - rec_len);
-				if (err) {
-					return err;
-				}
-			}
-
-			break;
-		}
-
-		offset += direntry1.rec_len;
-		direntry0 = direntry1;
+	err = ext2_direntry_delete(dev, parent_inum, name);
+	if (err) {
+		return err;
 	}
 
 	/* delete file */
@@ -2299,21 +2058,13 @@ inodefree:
 	return 0;
 }
 
-int ext2_symlink_delete(ext2_blkdev_t *dev, u32 parent_inum, u32 inum,
-		const char *name)
+int ext2_symlink_delete(ext2_blkdev_t *dev, u32 parent_inum, const char *name)
 {
 	int err = 0;
-	size_t offset = 0;
 	ext2_inode_t parent_inode, inode;
-	char namebuf[NAME_MAX + 1];
-	ext2_directory_entry_t direntry0, direntry1;
 	u8 blockbuf0[dev->block_size],
 	blockbuf1[dev->block_size], blockbuf2[dev->block_size];
-
-	err = ext2_inode_read(dev, inum, &inode);
-	if (err) {
-		return err;
-	}
+	u32 inum;
 
 	err = ext2_inode_read(dev, parent_inum, &parent_inode);
 	if (err) {
@@ -2323,47 +2074,24 @@ int ext2_symlink_delete(ext2_blkdev_t *dev, u32 parent_inum, u32 inum,
 	if ((parent_inode.i_mode & EXT2_FILE_FORMAT_MASK) != EXT2_S_IFDIR) {
 		return -ENOTDIR;
 	}
+
+	err = ext2_direntry_inum_by_name(dev, parent_inum, name, &inum);
+	if (err) {
+		return err;
+	}
+
+	err = ext2_inode_read(dev, inum, &inode);
+	if (err) {
+		return err;
+	}
+
 	if ((inode.i_mode & EXT2_FILE_FORMAT_MASK) != EXT2_S_IFLNK) {
 		return -EINVAL;
 	}
 
-	/* delete direntry */
-	while (1) {
-		err = ext2_file_read(dev, parent_inum, &direntry1,
-				sizeof(direntry1), offset);
-		if (err) {
-			return err;
-		}
-		err = ext2_file_read(dev, parent_inum, namebuf,
-				direntry1.name_len, offset + sizeof(direntry1));
-		if (err) {
-			return err;
-		}
-		namebuf[direntry1.name_len] = '\0';
-		if (direntry1.inode == inum && !strcmp(name, namebuf)) {
-			if (!(offset % dev->block_size)) {
-				direntry1.inode = 0;
-				err = ext2_file_write(dev, parent_inum, &direntry1,
-						sizeof(direntry1), offset);
-				if (err) {
-					return err;
-				}
-			} else {
-				u16 rec_len = direntry0.rec_len;
-				direntry0.rec_len += direntry1.rec_len;
-				err = ext2_file_write(dev, parent_inum, &direntry0,
-						sizeof(direntry0),
-						offset - rec_len);
-				if (err) {
-					return err;
-				}
-			}
-
-			break;
-		}
-
-		offset += direntry1.rec_len;
-		direntry0 = direntry1;
+	err = ext2_direntry_delete(dev, parent_inum, name);
+	if (err) {
+		return err;
 	}
 
 	/* delete file */
@@ -2524,46 +2252,315 @@ inodefree:
 	return 0;
 }
 
+int ext2_file_delete(ext2_blkdev_t *dev, u32 dirinum, const char *name)
+{
+	int err;
+	u32 inum;
+	ext2_inode_t dirinode, inode;
+
+	err = ext2_inode_read(dev, dirinum, &dirinode);
+	if (err) {
+		return err;
+	}
+
+	if ((dirinode.i_mode & EXT2_FILE_FORMAT_MASK) != EXT2_S_IFDIR) {
+		return -ENOTDIR;
+	}
+
+	err = ext2_direntry_inum_by_name(dev, dirinum, name, &inum);
+	if (err) {
+		kprintf_s("ttt\n");
+		return err;
+	}
+
+	err = ext2_inode_read(dev, inum, &inode);
+	if (err) {
+		return err;
+	}
+
+	if ((inode.i_mode & EXT2_FILE_FORMAT_MASK) == EXT2_S_IFREG) {
+		err = ext2_regular_delete(dev, dirinum, name);
+		if (err) {
+			return err;
+		}
+	} else if ((inode.i_mode & EXT2_FILE_FORMAT_MASK) == EXT2_S_IFDIR) {
+		err = ext2_directory_delete(dev, dirinum, name);
+		if (err) {
+			return err;
+		}
+	} else if ((inode.i_mode & EXT2_FILE_FORMAT_MASK) == EXT2_S_IFLNK) {
+		err = ext2_symlink_delete(dev, dirinum, name);
+		if (err) {
+			return err;
+		}
+	} else {
+		return -EIO;
+	}
+
+	return 0;
+}
+
 int ext2_file_rename(ext2_blkdev_t *dev, const char *oldpath, const char *newpath,
 		u32 relinum)
 {
+	int err;
+	u32 srcinum, dstinum, parent_srcinum, parent_dstinum;
+	ext2_inode_t srcinode, dstinode, parent_srcinode, parent_dstinode;
+	size_t newpathlen = strlen(newpath);
+	size_t oldpathlen = strlen(oldpath);
+	char newpath0[newpathlen], newpath1[newpathlen];
+	char oldpath0[oldpathlen], oldpath1[oldpathlen];
+	char *dstfilename, *dstpathname;
+	char *srcfilename, *srcpathname;
+
+	strcpy(oldpath0, oldpath);
+	strcpy(oldpath1, oldpath);
+	srcpathname = dirname(oldpath0);
+	srcfilename = basename(oldpath1);
+
+	strcpy(newpath0, newpath);
+	strcpy(newpath1, newpath);
+	dstpathname = dirname(newpath0);
+	dstfilename = basename(newpath1);
+
+	err = ext2_file_lookup(dev, oldpath, &srcinum, relinum, false);
+	if (err) {
+		return err;
+	}
+	err = ext2_inode_read(dev, srcinum, &srcinode);
+	if (err) {
+		return err;
+	}
+
+	if (oldpath[oldpathlen] == '/' &&
+			(srcinode.i_mode & EXT2_FILE_FORMAT_MASK) != EXT2_S_IFDIR) {
+		return -ENOTDIR;
+	}
+
+	err = ext2_file_lookup(dev, srcpathname, &parent_srcinum, relinum, true);
+	if (err) {
+		return err;
+	}
+
+	err = ext2_file_lookup(dev, newpath, &dstinum, relinum, false);
+	if (err) {
+		err = ext2_file_lookup(dev, dstpathname, &parent_dstinum, relinum, true);
+		if (err) {
+			return err;
+		}
+		err = ext2_inode_read(dev, parent_dstinum, &parent_dstinode);
+		if (err) {
+			return err;
+		}
+
+		if ((parent_dstinode.i_mode & EXT2_FILE_FORMAT_MASK) != EXT2_S_IFDIR) {
+			return -ENOTDIR;
+		}
+
+		err = ext2_direntry_create(dev, parent_dstinum, srcinum, dstfilename,
+			EXT2_STYPE_TO_FTTYPE(srcinode.i_mode & EXT2_FILE_FORMAT_MASK));
+		if (err) {
+			return err;
+		}
+
+		err = ext2_direntry_delete(dev, parent_srcinum, srcfilename);
+		if (err) {
+			return err;
+		}
+
+		if ((srcinode.i_mode & EXT2_FILE_FORMAT_MASK) == EXT2_S_IFDIR) {
+			err = ext2_inode_read(dev, parent_srcinum, &srcinode);
+			if (err) {
+				return err;
+			}
+			parent_srcinode.i_links_count--;
+			err = ext2_inode_write(dev, parent_srcinum, &parent_srcinode);
+			if (err) {
+				return err;
+			}
+
+			err = ext2_direntry_delete(dev, srcinum, "..");
+			if (err) {
+				return err;
+			}
+
+			err = ext2_direntry_create(dev, srcinum, parent_dstinum, "..",
+					EXT2_FT_DIR);
+			if (err) {
+				return err;
+			}
+
+			err = ext2_inode_read(dev, parent_dstinum, &parent_dstinode);
+			if (err) {
+				return err;
+			}
+			parent_dstinode.i_links_count++;
+			err = ext2_inode_write(dev, parent_dstinum, &dstinode);
+			if (err) {
+				return err;
+			}
+		}
+
+		return 0;
+	}
+	err = ext2_inode_read(dev, dstinum, &dstinode);
+	if (err) {
+		return err;
+	}
+	if (newpath[oldpathlen] == '/' &&
+			(dstinode.i_mode & EXT2_FILE_FORMAT_MASK) != EXT2_S_IFDIR) {
+		return -ENOTDIR;
+	}
+
+	if ((dstinode.i_mode & EXT2_FILE_FORMAT_MASK) == EXT2_S_IFDIR) {
+		u32 tmp;
+		err = ext2_direntry_inum_by_name(dev, dstinum, srcfilename, &tmp);
+		if (!err) {
+			int err = ext2_file_delete(dev, dstinum, srcfilename);
+			if (err) {
+				return err;
+			}
+		} else if (err != -ENOENT) {
+			return err;
+		}
+
+		err = ext2_direntry_create(dev, dstinum, srcinum, srcfilename,
+			EXT2_STYPE_TO_FTTYPE(srcinode.i_mode & EXT2_FILE_FORMAT_MASK));
+		if (err) {
+			return err;
+		}
+
+		err = ext2_direntry_delete(dev, parent_srcinum, srcfilename);
+		if (err) {
+			return err;
+		}
+
+		if ((srcinode.i_mode & EXT2_FILE_FORMAT_MASK) == EXT2_S_IFDIR) {
+			err = ext2_inode_read(dev, parent_srcinum, &srcinode);
+			if (err) {
+				return err;
+			}
+			parent_srcinode.i_links_count--;
+			err = ext2_inode_write(dev, parent_srcinum, &parent_srcinode);
+			if (err) {
+				return err;
+			}
+
+			err = ext2_direntry_delete(dev, srcinum, "..");
+			if (err) {
+				return err;
+			}
+
+			err = ext2_direntry_create(dev, srcinum, dstinum, "..",
+					EXT2_FT_DIR);
+			if (err) {
+				return err;
+			}
+
+			err = ext2_inode_read(dev, dstinum, &dstinode);
+			if (err) {
+				return err;
+			}
+			dstinode.i_links_count++;
+			err = ext2_inode_write(dev, dstinum, &dstinode);
+			if (err) {
+				return err;
+			}
+		}
+
+		return 0;
+	}
+	
+	err = ext2_file_lookup(dev, dstpathname, &parent_dstinum, relinum, true);
+	if (err) {
+		return err;
+	}
+
+	err = ext2_file_delete(dev, parent_dstinum, dstfilename);
+	if (err) {
+		return err;
+	}
+
+	err = ext2_direntry_create(dev, parent_dstinum, srcinum, dstfilename,
+		EXT2_STYPE_TO_FTTYPE(srcinode.i_mode & EXT2_FILE_FORMAT_MASK));
+	if (err) {
+		return err;
+	}
+
+	err = ext2_direntry_delete(dev, parent_srcinum, srcfilename);
+	if (err) {
+		return err;
+	}
+
+	if ((srcinode.i_mode & EXT2_FILE_FORMAT_MASK) == EXT2_S_IFDIR) {
+		err = ext2_inode_read(dev, parent_srcinum, &srcinode);
+		if (err) {
+			return err;
+		}
+		parent_srcinode.i_links_count--;
+		err = ext2_inode_write(dev, parent_srcinum, &parent_srcinode);
+		if (err) {
+			return err;
+		}
+
+		err = ext2_direntry_delete(dev, srcinum, "..");
+		if (err) {
+			return err;
+		}
+
+		err = ext2_direntry_create(dev, srcinum, parent_dstinum, "..",
+				EXT2_FT_DIR);
+		if (err) {
+			return err;
+		}
+
+		err = ext2_inode_read(dev, parent_dstinum, &parent_dstinode);
+		if (err) {
+			return err;
+		}
+		parent_dstinode.i_links_count++;
+		err = ext2_inode_write(dev, parent_dstinum, &dstinode);
+		if (err) {
+			return err;
+		}
+	}
+
+	return 0;
+}
+
+int ext2_permission_check(ext2_blkdev_t *dev, u32 inum, u16 uid, u16 gid)
+{
 
 
 	return 0;
 }
 
-int ext2_permission_check()
+int ext2_setattr(ext2_blkdev_t *dev, u32 inum, u16 attr)
+{
+
+
+	return 0;
+}
+
+int ext2_getattr(ext2_blkdev_t *dev, u32 inum, u16 *attr)
 {
 
 	return 0;
 }
 
-int ext2_setattr()
+int ext2_update_time(ext2_blkdev_t *dev, u32 inum)
 {
 
 	return 0;
 }
 
-int ext2_getattr()
+int ext2_root_mount(ext2_blkdev_t *dev)
 {
 
 	return 0;
 }
 
-
-int ext2_update_time()
-{
-
-	return 0;
-}
-
-int ext2_root_mount()
-{
-
-	return 0;
-}
-
-int ext2_root_umount()
+int ext2_root_umount(ext2_blkdev_t *dev)
 {
 
 	return 0;
