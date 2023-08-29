@@ -113,6 +113,7 @@ int virtio_blk_write(size_t devnum, u64 sector, void *data);
 void virtio_blk_irq_handler(size_t devnum);
 
 int virtio_blk_read_nosleep(size_t devnum, u64 sector, void *data);
+int virtio_blk_write_nosleep(size_t devnum, u64 sector, void *data);
 
 #endif
 

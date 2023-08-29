@@ -43,6 +43,7 @@ void kmain(void)
 		proc_hart_init();
 		virtio_init();
 		ext2_init();
+		ext2_root_mount();
 
 		/* process testing function */
 		__proc_test__();

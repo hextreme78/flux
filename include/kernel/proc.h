@@ -131,6 +131,10 @@ struct proc {
 
 	proc_t *parent;
 	list_t children;
+
+	u16 uid;
+	u16 gid;
+	u32 cwd;
 };
 
 void proc_init(void);

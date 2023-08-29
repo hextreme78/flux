@@ -9,7 +9,7 @@ typedef struct ext2_inode ext2_inode_t;
 typedef struct ext2_blkdev ext2_blkdev_t;
 typedef struct ext2_directory_entry ext2_directory_entry_t;
 
-#include <kernel/spinlock.h>
+#include <kernel/mutex.h>
 #include <kernel/list.h>
 
 #define EXT2_INODE_SET_I_SIZE(devptr, inode, size) \
@@ -89,8 +89,13 @@ typedef struct ext2_directory_entry ext2_directory_entry_t;
 /* for good old revision */
 #define EXT2_INODE_SIZE 128
 
-/* -- file format -- */
+/* s_state values */
+#define EXT2_VALID_FS 1
+#define EXT2_ERROR_FS 2
+
 #define EXT2_FILE_FORMAT_MASK 0xf000
+#define EXT2_ACCESS_RIGHTS_MASK 0x0fff
+/* -- file format -- */
 #define EXT2_S_IFSOCK 0xc000 /* socket */
 #define EXT2_S_IFLNK  0xa000 /* symbolic link */
 #define EXT2_S_IFREG  0x8000 /* regular file */
@@ -246,7 +251,7 @@ struct ext2_directory_entry {
 } __attribute__((packed));
 
 struct ext2_blkdev {
-	spinlock_t lock;
+	mutex_t lock;
 
 	size_t virtio_devnum;
 
@@ -265,14 +270,31 @@ struct ext2_blkdev {
 	list_t devlist;
 };
 
-void ext2_init(void);
+extern ext2_blkdev_t *rootblkdev;
 
-int ext2_block_read(ext2_blkdev_t *dev, u64 blknum, void *buf);
-int ext2_block_write(ext2_blkdev_t *dev, u64 blknum, void *buf);
+void ext2_init(void);
+void ext2_root_mount(void);
+void ext2_root_umount(void);
+
 int ext2_nbytes_read(ext2_blkdev_t *dev, void *buf, u64 len, u64 offset);
 int ext2_nbytes_write(ext2_blkdev_t *dev, void *buf, u64 len, u64 offset);
-int ext2_inode_read(ext2_blkdev_t *dev, u32 inum, ext2_inode_t *inode);
-int ext2_inode_write(ext2_blkdev_t *dev, u32 inum, ext2_inode_t *inode);
+int ext2_file_read(ext2_blkdev_t *dev, u32 inum, void *buf, u64 len, u64 offset);
+int ext2_file_write(ext2_blkdev_t *dev, u32 inum, void *buf, u64 len, u64 offset);
+int ext2_file_lookup(ext2_blkdev_t *dev, const char *path, u32 *inum, u32 relinum,
+		bool followlink);
+int ext2_readlink(ext2_blkdev_t *dev, const char *path, char *pathbuf, u32 relinum);
+int ext2_creat(ext2_blkdev_t *dev, const char *path, u16 mode,
+		u16 uid, u16 gid, u32 relinum);
+int ext2_link(ext2_blkdev_t *dev, const char *oldpath, const char *newpath,
+		u32 relinum);
+int ext2_mkdir(ext2_blkdev_t *dev, const char *path, u16 mode,
+		u16 uid, u16 gid, u32 relinum);
+int ext2_symlink(ext2_blkdev_t *dev, const char *path, u16 mode,
+		u16 uid, u16 gid, const char *symlink, u32 relinum);
+int ext2_unlink(ext2_blkdev_t *dev, const char *path, u32 relinum);
+int ext2_rmdir(ext2_blkdev_t *dev, const char *path, u32 relinum);
+int ext2_rename(ext2_blkdev_t *dev, const char *oldpath, const char *newpath,
+		u32 relinum);
 
 #endif
 

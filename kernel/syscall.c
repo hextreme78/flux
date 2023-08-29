@@ -14,35 +14,28 @@ int ext2_create_test(void)
 	u16 mode = EXT2_S_IRUSR | EXT2_S_IWUSR | EXT2_S_IXUSR;
 	u16 uid = 1000;
 	u16 gid = 1000;
-	u32 regularinum;
 
-	err = ext2_regular_create(dev, 2, "regular", mode, uid, gid);
+	err = ext2_creat(dev, "/regular", mode, uid, gid, 2);
 	if (err) {
-		kprintf_s("ext2_regular_create() err %d\n", err);
+		kprintf_s("ext2_creat() err %d\n", err);
 		return err;
 	}
 
-	err = ext2_file_lookup(dev, "/regular", &regularinum, 2, false);
+	err = ext2_link(dev, "/regular", "/hardlink", 2);
 	if (err) {
-		kprintf_s("ext2_file_lookup() err %d\n", err);
+		kprintf_s("ext2_link() err %d\n", err);
 		return err;
 	}
 
-	err = ext2_hardlink_create(dev, 2, regularinum, "hardlink");
+	err = ext2_mkdir(dev, "/directory", mode, uid, gid, 2);
 	if (err) {
-		kprintf_s("ext2_hardlink_create() err %d\n", err);
+		kprintf_s("ext2_mkdir() err %d\n", err);
 		return err;
 	}
 
-	err = ext2_directory_create(dev, 2, "directory", mode, uid, gid);
+	err = ext2_symlink(dev, "/symlink", mode, uid, gid, "directory", 2);
 	if (err) {
-		kprintf_s("ext2_directory_create() err %d\n", err);
-		return err;
-	}
-
-	err = ext2_symlink_create(dev, 2, "symlink", mode, uid, gid, "./directory");
-	if (err) {
-		kprintf_s("ext2_symlink_create() err %d\n", err);
+		kprintf_s("ext2_symlink() err %d\n", err);
 		return err;
 	}
 
@@ -55,27 +48,27 @@ int ext2_delete_test(void)
 	extern ext2_blkdev_t ext2_dev_list;
 	ext2_blkdev_t *dev = list_next_entry(&ext2_dev_list, devlist);
 
-	err = ext2_file_delete(dev, 2, "regular");
+	err = ext2_unlink(dev, "/regular", 2);
 	if (err) {
-		kprintf_s("1 ext2_regular_delete() err %d\n", err);
+		kprintf_s("1 -- ext2_unlink() err %d\n", err);
 		return err;
 	}
 
-	err = ext2_file_delete(dev, 2, "hardlink");
+	err = ext2_unlink(dev, "/hardlink", 2);
 	if (err) {
-		kprintf_s("2 ext2_regular_delete() err %d\n", err);
+		kprintf_s("2 -- ext2_unlink() err %d\n", err);
 		return err;
 	}
 
-	err = ext2_file_delete(dev, 2, "directory");
+	err = ext2_rmdir(dev, "/directory", 2);
 	if (err) {
-		kprintf_s("ext2_directory_delete() err %d\n", err);
+		kprintf_s("ext2_rmdir() err %d\n", err);
 		return err;
 	}
 
-	err = ext2_file_delete(dev, 2, "symlink");
+	err = ext2_unlink(dev, "/symlink", 2);
 	if (err) {
-		kprintf_s("ext2_symlink_delete() err %d\n", err);
+		kprintf_s("3 -- ext2_unlink() err %d\n", err);
 		return err;
 	}
 
@@ -88,9 +81,9 @@ int ext2_move_test(void)
 	extern ext2_blkdev_t ext2_dev_list;
 	ext2_blkdev_t *dev = list_next_entry(&ext2_dev_list, devlist);
 
-	err = ext2_file_rename(dev, "/regular", "directory/", 2);
+	err = ext2_rename(dev, "/regular", "/directory/", 2);
 	if (err) {
-		kprintf_s("ext2_file_rename() err %d\n", err);
+		kprintf_s("ext2_rename() err %d\n", err);
 		return err;
 	}
 
