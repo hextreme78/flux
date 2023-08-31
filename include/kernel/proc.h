@@ -7,7 +7,7 @@ typedef struct trapframe trapframe_t;
 typedef struct context   context_t;
 typedef struct cpu       cpu_t;
 typedef struct segment   segment_t;
-typedef i64              pid_t;
+typedef struct filedesc  fd_t;
 typedef struct proc      proc_t;
 
 #include <kernel/vm.h>
@@ -111,12 +111,16 @@ struct segment {
 	list_t segments;
 };
 
+struct filedesc {
+	u32 inum;
+	int flags;
+	off_t offset;
+};
+
 struct proc {
 	spinlock_t lock;
 	u64 state;
 	void *wchan;
-
-	int errno;
 
 	pid_t pid;
 	int exit_status;
@@ -135,6 +139,8 @@ struct proc {
 	u16 uid;
 	u16 gid;
 	u32 cwd;
+
+	fd_t filetable[FD_MAX];
 };
 
 void proc_init(void);

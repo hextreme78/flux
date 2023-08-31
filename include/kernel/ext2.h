@@ -9,6 +9,7 @@ typedef struct ext2_inode ext2_inode_t;
 typedef struct ext2_blkdev ext2_blkdev_t;
 typedef struct ext2_directory_entry ext2_directory_entry_t;
 
+#include <kernel/fs.h>
 #include <kernel/mutex.h>
 #include <kernel/list.h>
 
@@ -278,8 +279,6 @@ void ext2_root_umount(void);
 
 int ext2_nbytes_read(ext2_blkdev_t *dev, void *buf, u64 len, u64 offset);
 int ext2_nbytes_write(ext2_blkdev_t *dev, void *buf, u64 len, u64 offset);
-int ext2_file_read(ext2_blkdev_t *dev, u32 inum, void *buf, u64 len, u64 offset);
-int ext2_file_write(ext2_blkdev_t *dev, u32 inum, void *buf, u64 len, u64 offset);
 int ext2_file_lookup(ext2_blkdev_t *dev, const char *path, u32 *inum, u32 relinum,
 		bool followlink);
 int ext2_readlink(ext2_blkdev_t *dev, const char *path, char *pathbuf, u32 relinum);
@@ -295,6 +294,14 @@ int ext2_unlink(ext2_blkdev_t *dev, const char *path, u32 relinum);
 int ext2_rmdir(ext2_blkdev_t *dev, const char *path, u32 relinum);
 int ext2_rename(ext2_blkdev_t *dev, const char *oldpath, const char *newpath,
 		u32 relinum);
+int ext2_truncate(ext2_blkdev_t *dev, const char *path, size_t sz,
+		u32 relinum);
+int ext2_istat(ext2_blkdev_t *dev, u32 inum, struct stat *st);
+int ext2_stat(ext2_blkdev_t *dev, const char *path, struct stat *st,
+		u32 relinum);
+int ext2_regular_read(ext2_blkdev_t *dev, u32 inum, void *buf, u64 len, u64 offset);
+int ext2_regular_write(ext2_blkdev_t *dev, u32 inum, void *buf, u64 len, u64 offset);
+int ext2_chdir(ext2_blkdev_t *dev, const char *path, u32 *cwd);
 
 #endif
 

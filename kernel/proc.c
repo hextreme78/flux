@@ -38,7 +38,7 @@ static pid_t pid_alloc(void)
 	int irqflags;
 	pid_t pid;
 	spinlock_acquire_irqsave(&nextpid_lock, irqflags);
-	if (nextpid > PIDMAX) {
+	if (nextpid > PID_MAX) {
 		/* we reached maximum pid, so no more pids */
 		spinlock_release_irqrestore(&nextpid_lock, irqflags);
 		return 0;
@@ -81,9 +81,15 @@ static proc_t *proc_slot_alloc(void)
 	proc->parent = NULL;
 	list_init(&proc->children);
 
-	proc->errno = 0;
-
 	proc->wchan = NULL;
+
+	for (size_t i = 0; i < FD_MAX; i++) {
+		proc->filetable[i].inum = 0;
+	}
+
+	proc->uid = 0;
+	proc->gid = 0;
+	proc->cwd = 2;
 
 	return proc;
 }
