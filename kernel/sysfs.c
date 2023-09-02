@@ -246,7 +246,7 @@ int sys_open(const char *path, int flags, mode_t mode)
 		mutex_unlock(&rootblkdev->lock);
 		return err;
 	}
-	if (flags & (O_TRUNC | O_WRONLY)) {
+	if ((flags & O_TRUNC) && ((flags + 1) & (O_WRONLY + 1))) {
 		err = ext2_truncate(rootblkdev, pathbuf, 0, curproc()->cwd);
 		if (err) {
 			mutex_unlock(&rootblkdev->lock);
@@ -279,7 +279,7 @@ ssize_t sys_read(int fd, void *buf, size_t count)
 	if (fd >= FD_MAX || !curproc()->filetable[fd].inum) {
 		return -EBADFD;
 	}
-	if (!(curproc()->filetable[fd].flags & O_RDONLY)) {
+	if (!((curproc()->filetable[fd].flags + 1) & (O_RDONLY + 1))) {
 		return -EBADF;
 	}
 
@@ -316,7 +316,7 @@ ssize_t sys_write(int fd, const void *buf, size_t count)
 	if (fd >= FD_MAX || !curproc()->filetable[fd].inum) {
 		return -EBADFD;
 	}
-	if (!(curproc()->filetable[fd].flags & O_WRONLY)) {
+	if (!((curproc()->filetable[fd].flags + 1) & (O_WRONLY + 1))) {
 		return -EBADF;
 	}
 
@@ -415,6 +415,30 @@ int sys_stat(const char *path, struct stat *st)
 	return 0;
 }
 
+int sys_fstat(int fd, struct stat *st)
+{
+	int err;
+	struct stat stbuf;
+
+	if (fd >= FD_MAX || !curproc()->filetable[fd].inum) {
+		return -EBADFD;
+	}
+
+	mutex_lock(&rootblkdev->lock);
+	err = ext2_istat(rootblkdev, curproc()->filetable[fd].inum, &stbuf);
+	if (err) {
+		mutex_unlock(&rootblkdev->lock);
+		return err;
+	}
+	mutex_unlock(&rootblkdev->lock);
+
+	if (copy_to_user(st, &stbuf, sizeof(*st))) {
+		return -EFAULT;
+	}
+
+	return 0;
+}
+
 int sys_chdir(const char *path)
 {
 	int err;
@@ -431,6 +455,41 @@ int sys_chdir(const char *path)
 
 	mutex_lock(&rootblkdev->lock);
 	err = ext2_chdir(rootblkdev, pathbuf, &curproc()->cwd);
+	if (err) {
+		mutex_unlock(&rootblkdev->lock);
+		return err;
+	}
+	mutex_unlock(&rootblkdev->lock);
+
+	return 0;
+}
+
+int sys_symlink(const char *path1, const char *path2)
+{
+	int err;
+	size_t pathlen1, pathlen2;
+
+	pathlen1 = strnlen_user(path1, PATH_MAX);
+	if (pathlen1 > PATH_MAX) {
+		return -ENAMETOOLONG;
+	}
+	char pathbuf1[pathlen1];
+	if (copy_from_user(pathbuf1, path1, pathlen1)) {
+		return -EFAULT;
+	}
+
+	pathlen2 = strnlen_user(path2, PATH_MAX);
+	if (pathlen2 > PATH_MAX) {
+		return -ENAMETOOLONG;
+	}
+	char pathbuf2[pathlen2];
+	if (copy_from_user(pathbuf2, path2, pathlen2)) {
+		return -EFAULT;
+	}
+
+	mutex_lock(&rootblkdev->lock);
+	err = ext2_symlink(rootblkdev, pathbuf2, 0777, curproc()->uid,
+			curproc()->gid, pathbuf1, curproc()->cwd);
 	if (err) {
 		mutex_unlock(&rootblkdev->lock);
 		return err;

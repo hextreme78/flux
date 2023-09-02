@@ -1,13 +1,20 @@
-TOOLCHAIN_PREFIX = riscv64-unknown-linux-gnu
+MAKE = make
 
-CC = $(TOOLCHAIN_PREFIX)-gcc
-CFLAGS = -fno-pie -no-pie -static -nostdlib
+all: newlib/newlib.a \
+	bin/test1 \
+	bin/test2
 
-LIB = _start.c syscall.c syscall.S
+newlib/newlib.a:
+	$(MAKE) -C newlib
 
-all:
-	$(CC) $(CFLAGS) $(LIB) test1.c -o test1
-	$(CC) $(CFLAGS) $(LIB) test2.c -o test2
+bin/test1:
+	$(MAKE) -C test1
+
+bin/test2:
+	$(MAKE) -C test2
 
 clean:
-	rm test1 test2
+	$(MAKE) -C newlib clean
+	$(MAKE) -C test1 clean
+	$(MAKE) -C test2 clean
+

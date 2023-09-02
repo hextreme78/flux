@@ -3,7 +3,7 @@
 #include <kernel/klib.h>
 #include <kernel/errno.h>
 
-void sys__exit(int status)
+void sys_exit(int status)
 {
 	curproc()->exit_status = status;
 	sched_zombie();

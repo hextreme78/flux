@@ -3,7 +3,7 @@
 
 #include <kernel/proc.h>
 
-void sys__exit(int status);
+void sys_exit(int status);
 pid_t sys_wait(int *status);
 pid_t sys_getpid(void);
 

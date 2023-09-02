@@ -267,6 +267,7 @@ int proc_create(void *elf, size_t elfsz)
 	}
 
 	proc->trapframe->sp = (u64) VA_USTACK + USTACKNPAGES * PAGESZ;
+	proc->trapframe->sp -= 8; // remove later
 	proc->trapframe->kstack = (u64) proc->kstack + KSTACKNPAGES * PAGESZ;
 	proc->trapframe->kerneltrap = (u64) kerneltrap;
 	proc->trapframe->kpagetable = (u64) proc->kpagetable;

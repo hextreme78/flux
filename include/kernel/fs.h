@@ -3,18 +3,15 @@
 
 #include <kernel/types.h>
 
-#define O_RDONLY   1
-#define O_WRONLY   2
-#define O_RDWR     (O_RDONLY | O_WRONLY)
-#define O_APPEND   4
-#define O_CREAT    8
-#define O_DSYNC    16
-#define O_EXCL     32
-#define O_NOCTTY   64
-#define O_NONBLOCK 128
-#define O_RSYNC    256
-#define O_SYNC     512
-#define O_TRUNC    1024
+#define O_RDONLY   0
+#define O_WRONLY   1
+#define O_RDWR     2
+#define O_APPEND   0x0008
+#define O_CREAT    0x0200
+#define O_TRUNC    0x0400
+#define O_EXCL     0x0800
+#define O_NONBLOCK 0x4000
+#define O_NOCTTY   0x8000
 
 #define SEEK_SET 0
 #define SEEK_CUR 1

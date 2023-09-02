@@ -18,6 +18,8 @@ off_t sys_lseek(int fd, off_t offset, int whence);
 int sys_close(int fd);
 int sys_stat(const char *path, struct stat *st);
 int sys_chdir(const char *path);
+int sys_symlink(const char *path1, const char *path2);
+int sys_fstat(int fd, struct stat *st);
 
 #endif
 

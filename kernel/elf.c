@@ -75,9 +75,9 @@ static Elf64_Phdr *elf_phdr_next(Elf64_Ehdr *ehdr, Elf64_Phdr *phdr, size_t elfs
 		return (Elf64_Phdr *) ((char *) ehdr + ehdr->e_phoff);
 	}
 
-	cursize = (size_t) phdr - (size_t) ehdr + ehdr->e_phentsize;
+	cursize = (size_t) phdr - (size_t) ehdr + ehdr->e_phentsize + 1;
 	curphcount = (cursize - ehdr->e_ehsize) / ehdr->e_phentsize;
-	if (curphcount + 1 >= ehdr->e_phnum) {
+	if (curphcount >= ehdr->e_phnum) {
 		return NULL;
 	}
 	if (elfsz < cursize + ehdr->e_phentsize) {
