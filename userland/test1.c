@@ -3,12 +3,20 @@
 
 int main(void)
 {
-	debug_printint(getpid());
+	char str[] = "Hello, world!\n";
+	int fd;
 
-	for (size_t i = 0; i < 10000000; i++)
-		asm volatile("nop;");
+	creat("testfile", 0777);
 
-	//debug_printint(getpid());
+	link("testfile", "testlink");
+
+	fd = open("/testlink", O_RDWR);
+
+	write(fd, str, sizeof(str));
+
+	close(fd);
+
+	debug_printint(123);
 
 	return 0;
 }

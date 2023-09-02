@@ -7,3 +7,4 @@ void _start(void)
 	int status = main();
 	_exit(status);
 }
+

@@ -246,7 +246,7 @@ int sys_open(const char *path, int flags, mode_t mode)
 		mutex_unlock(&rootblkdev->lock);
 		return err;
 	}
-	if (flags & O_TRUNC & O_WRONLY) {
+	if (flags & (O_TRUNC | O_WRONLY)) {
 		err = ext2_truncate(rootblkdev, pathbuf, 0, curproc()->cwd);
 		if (err) {
 			mutex_unlock(&rootblkdev->lock);
@@ -275,7 +275,6 @@ int sys_open(const char *path, int flags, mode_t mode)
 
 ssize_t sys_read(int fd, void *buf, size_t count)
 {
-	int err;
 	void *kbuf;
 	if (fd >= FD_MAX || !curproc()->filetable[fd].inum) {
 		return -EBADFD;
@@ -289,10 +288,10 @@ ssize_t sys_read(int fd, void *buf, size_t count)
 	}
 
 	mutex_lock(&rootblkdev->lock);
-	err = ext2_regular_read(rootblkdev,
+	count = ext2_regular_read(rootblkdev,
 			curproc()->filetable[fd].inum, kbuf, count,
 			curproc()->filetable[fd].offset);
-	if (err) {
+	if (count < 0) {
 		mutex_unlock(&rootblkdev->lock);
 		kfree(kbuf);
 		return -EINVAL;
@@ -313,7 +312,6 @@ ssize_t sys_read(int fd, void *buf, size_t count)
 
 ssize_t sys_write(int fd, const void *buf, size_t count)
 {
-	int err;
 	void *kbuf;
 	if (fd >= FD_MAX || !curproc()->filetable[fd].inum) {
 		return -EBADFD;
@@ -332,10 +330,10 @@ ssize_t sys_write(int fd, const void *buf, size_t count)
 	}
 
 	mutex_lock(&rootblkdev->lock);
-	err = ext2_regular_write(rootblkdev,
+	count = ext2_regular_write(rootblkdev,
 			curproc()->filetable[fd].inum, kbuf, count,
 			curproc()->filetable[fd].offset);
-	if (err) {
+	if (count < 0) {
 		mutex_unlock(&rootblkdev->lock);
 		kfree(kbuf);
 		return -EINVAL;

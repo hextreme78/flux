@@ -1,6 +1,6 @@
 ARCH = riscv64
 PLATFORM = virt
-TOOLCHAIN_PREFIX = riscv64-unknown-linux-gnu
+TOOLCHAIN_PREFIX = riscv64-unknown-elf
 TARGET = kernel-$(ARCH)-$(PLATFORM)
 
 QEMU_SMP = 1

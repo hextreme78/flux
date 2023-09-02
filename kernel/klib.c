@@ -110,7 +110,7 @@ char *basename(char *path)
 	if (!path || !path[0]) {
 		return ".";
 	}
-	i = strlen(path);
+	i = strlen(path) - 1;
 	while (i && path[i] == '/') i--;
 	path[i + 1] = '\0';
 	while (i && path[i - 1] != '/') i--;

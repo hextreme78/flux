@@ -299,8 +299,8 @@ int ext2_truncate(ext2_blkdev_t *dev, const char *path, size_t sz,
 int ext2_istat(ext2_blkdev_t *dev, u32 inum, struct stat *st);
 int ext2_stat(ext2_blkdev_t *dev, const char *path, struct stat *st,
 		u32 relinum);
-int ext2_regular_read(ext2_blkdev_t *dev, u32 inum, void *buf, u64 len, u64 offset);
-int ext2_regular_write(ext2_blkdev_t *dev, u32 inum, void *buf, u64 len, u64 offset);
+ssize_t ext2_regular_read(ext2_blkdev_t *dev, u32 inum, void *buf, u64 len, u64 offset);
+ssize_t ext2_regular_write(ext2_blkdev_t *dev, u32 inum, void *buf, u64 len, u64 offset);
 int ext2_chdir(ext2_blkdev_t *dev, const char *path, u32 *cwd);
 
 #endif
