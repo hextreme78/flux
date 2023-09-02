@@ -1,12 +1,11 @@
 #include <syscall.h>
-#include <sys/types.h>
 #include <errno.h>
 #undef errno
 extern int errno;
 
-pid_t wait(int *wstatus)
+int rmdir(const char *pathname)
 {
-	long result = syscall(SYS_wait, wstatus);
+	long result = syscall(SYS_rmdir, pathname);
 	if (result < 0) {
 		errno = -result;
 		return -1;

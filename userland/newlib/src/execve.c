@@ -3,7 +3,7 @@
 #undef errno
 extern int errno;
 
-int _execve(const char *pathname, char *const argv[], char *const envp[])
+int execve(const char *pathname, char *const argv[], char *const envp[])
 {
 	long result = syscall(SYS_execve, pathname, argv, envp);
 	errno = -result;

@@ -4,9 +4,9 @@
 #undef errno
 extern int errno;
 
-pid_t wait(int *wstatus)
+int chdir(const char *path)
 {
-	long result = syscall(SYS_wait, wstatus);
+	long result = syscall(SYS_chdir, path);
 	if (result < 0) {
 		errno = -result;
 		return -1;

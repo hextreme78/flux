@@ -1,12 +1,11 @@
 #include <syscall.h>
-#include <sys/types.h>
 #include <errno.h>
 #undef errno
 extern int errno;
 
-pid_t wait(int *wstatus)
+int rename(const char *oldpath, const char *newpath)
 {
-	long result = syscall(SYS_wait, wstatus);
+	long result = syscall(SYS_rename, oldpath, newpath);
 	if (result < 0) {
 		errno = -result;
 		return -1;

@@ -6,7 +6,7 @@ extern int errno;
 
 struct stat;
 
-int _stat(const char *restrict pathname, struct stat *restrict statbuf)
+int stat(const char *restrict pathname, struct stat *restrict statbuf)
 {
 	long result = syscall(SYS_stat, pathname, statbuf);
 	if (result < 0) {

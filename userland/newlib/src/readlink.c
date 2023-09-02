@@ -4,9 +4,9 @@
 #undef errno
 extern int errno;
 
-pid_t wait(int *wstatus)
+ssize_t readlink(const char *restrict pathname, char *restrict buf, size_t bufsiz)
 {
-	long result = syscall(SYS_wait, wstatus);
+	long result = syscall(SYS_readlink, pathname, buf, bufsiz);
 	if (result < 0) {
 		errno = -result;
 		return -1;

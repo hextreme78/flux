@@ -4,7 +4,7 @@
 #undef errno
 extern int errno;
 
-pid_t _fork(void)
+pid_t fork(void)
 {
 	long result = syscall(SYS_fork);
 	if (result < 0) {

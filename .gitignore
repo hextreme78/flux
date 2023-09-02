@@ -2,7 +2,9 @@
 **/*.swp
 **/*.swo
 **/*.o
+**/*.a
+**/compile_commands.json
+**/bin/*
 .cache
 kernel-riscv64-virt
-compile_commands.json
 root.fs

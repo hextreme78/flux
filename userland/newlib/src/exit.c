@@ -1,6 +1,6 @@
 #include <syscall.h>
 
-void _exit(int status)
+void exit(int status)
 {
 	syscall(SYS_exit, status);
 	for (;;);

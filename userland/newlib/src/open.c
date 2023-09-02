@@ -4,9 +4,9 @@
 #undef errno
 extern int errno;
 
-int _open(const char *name, int flags, mode_t mode)
+int open(const char *pathname, int flags, mode_t mode)
 {
-	long result = syscall(SYS_open, name, flags, mode);
+	long result = syscall(SYS_open, pathname, flags, mode);
 	if (result < 0) {
 		errno = -result;
 		return -1;

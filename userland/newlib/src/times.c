@@ -6,7 +6,7 @@ extern int errno;
 
 struct tms;
 
-clock_t _times(struct tms *buf)
+clock_t times(struct tms *buf)
 {
 	long result = syscall(SYS_times, buf);
 	if (result < 0) {

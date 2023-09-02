@@ -3,7 +3,7 @@
 #undef errno
 extern int errno;
 
-int _link(const char *oldpath, const char *newpath)
+int link(const char *oldpath, const char *newpath)
 {
 	long result = syscall(SYS_link, oldpath, newpath);
 	if (result < 0) {

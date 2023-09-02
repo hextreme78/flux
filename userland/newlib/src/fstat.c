@@ -6,7 +6,7 @@ extern int errno;
 
 struct stat;
 
-int _fstat(int fd, struct stat *statbuf)
+int fstat(int fd, struct stat *statbuf)
 {
 	long result = syscall(SYS_fstat, fd, statbuf);
 	if (result < 0) {

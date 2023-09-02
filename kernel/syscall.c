@@ -91,10 +91,6 @@ void syscall(void)
 		ret = sys_chdir((void *) tf->a0);
 		break;
 
-	case SYS_creat:
-		ret = sys_creat((void *) tf->a0, tf->a1);
-		break;
-
 	case SYS_mkdir:
 		ret = sys_mkdir((void *) tf->a0, tf->a1);
 		break;
@@ -116,7 +112,6 @@ void syscall(void)
 		break;
 
 	default:
-		kprintf_s("%x\n", r_sepc());
 		kprintf_s("unknown syscall %u\n", sysnum);
 	}
 

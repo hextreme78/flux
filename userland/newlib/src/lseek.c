@@ -4,7 +4,7 @@
 #undef errno
 extern int errno;
 
-off_t _lseek(int fd, off_t offset, int whence)
+off_t lseek(int fd, off_t offset, int whence)
 {
 	long result = syscall(SYS_lseek, fd, offset, whence);
 	if (result < 0) {

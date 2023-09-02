@@ -4,9 +4,9 @@
 #undef errno
 extern int errno;
 
-pid_t wait(int *wstatus)
+int mkdir(const char *pathname, mode_t mode)
 {
-	long result = syscall(SYS_wait, wstatus);
+	long result = syscall(SYS_mkdir, pathname, mode);
 	if (result < 0) {
 		errno = -result;
 		return -1;

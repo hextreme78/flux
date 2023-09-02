@@ -1,12 +1,11 @@
 #include <syscall.h>
-#include <sys/types.h>
 #include <errno.h>
 #undef errno
 extern int errno;
 
-pid_t wait(int *wstatus)
+int symlink(const char *target, const char *linkpath)
 {
-	long result = syscall(SYS_wait, wstatus);
+	long result = syscall(SYS_symlink, target, linkpath);
 	if (result < 0) {
 		errno = -result;
 		return -1;

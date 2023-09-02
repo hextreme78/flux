@@ -3,7 +3,7 @@
 #undef errno
 extern int errno;
 
-int _isatty(int fd)
+int isatty(int fd)
 {
 	long result = syscall(SYS_isatty, fd);
 	if (result < 0) {
