@@ -3,7 +3,6 @@
 
 #include <kernel/fs.h>
 
-int sys_creat(const char *path, mode_t mode);
 int sys_link(const char *path1, const char *path2);
 int sys_mkdir(const char *path, mode_t mode);
 int sys_unlink(const char *path);
