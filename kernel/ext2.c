@@ -1537,6 +1537,41 @@ static int ext2_direntry_inum_by_name(ext2_blkdev_t *dev, u32 dirinum,
 	return 0;
 }
 
+static int ext2_direntry_name_by_inum(ext2_blkdev_t *dev, u32 dirinum,
+		char *name, u32 inum)
+{
+	int err;
+	size_t offset = 0;
+	u8 direntrybuf0[sizeof(ext2_directory_entry_t) + NAME_MAX];
+	ext2_directory_entry_t *direntry = (void *) &direntrybuf0;
+
+	while (1) {
+		err = ext2_file_read(dev, dirinum, direntry, sizeof(*direntry),
+				offset);
+		if (err == -EIO) {
+			return -ENOENT;
+		} else if (err < 0) {
+			return err;
+		}
+
+		if (inum == direntry->inode) {
+			err = ext2_file_read(dev, dirinum, direntry->name,
+					direntry->name_len, offset + sizeof(*direntry));
+			if (err < 0) {
+				return err;
+			}
+
+			memcpy(name, direntry->name, direntry->name_len);
+			name[direntry->name_len] = '\0';
+			break;
+		}
+
+		offset += direntry->rec_len;
+	}
+
+	return 0;
+}
+
 static int ext2_direntry_create(ext2_blkdev_t *dev, u32 dirinum,
 		u32 inum, const char *name, u8 filetype)
 {
@@ -2331,7 +2366,85 @@ static int ext2_file_delete(ext2_blkdev_t *dev, u32 dirinum, const char *name)
 	return 0;
 }
 
-static int ext2_regular_truncate(ext2_blkdev_t *dev, u32 inum, size_t sz)
+static int ext2_directory_absolute_path(ext2_blkdev_t *dev, u32 inum, char *buf)
+{
+	int err;
+	size_t i, j;
+	size_t rpathlen = 0;
+	char rpath[PATH_MAX];
+	char namebuf[NAME_MAX + 1];
+	size_t namebuflen;
+	ext2_inode_t inode;
+	u32 curinum = inum, parent_inum;
+
+	err = ext2_inode_read(dev, inum, &inode);
+	if (err) {
+		return err;
+	}
+
+	if ((inode.i_mode & EXT2_FILE_FORMAT_MASK) != EXT2_S_IFDIR) {
+		return -ENOTDIR;
+	}
+
+	while (curinum != EXT2_ROOT_INODE) {
+		err = ext2_direntry_inum_by_name(dev, curinum, "..", &parent_inum);
+		if (err) {
+			return err;
+		}
+
+		err = ext2_direntry_name_by_inum(dev, parent_inum, namebuf, curinum);
+		if (err) {
+			return err;
+		}
+
+		namebuflen = strlen(namebuf);
+		if (rpathlen + namebuflen + 1 >= PATH_MAX - 1) {
+			return -ENAMETOOLONG;
+		}
+
+		memcpy(rpath + rpathlen, namebuf, namebuflen);
+		rpathlen += namebuflen;
+		rpath[rpathlen] = '/';
+		rpathlen += 1;
+		curinum = parent_inum;
+	}
+
+	if (!rpathlen) {
+		buf[0] = '/';
+		buf[1] = '\0';
+		return 0;
+	}
+
+	i = rpathlen - 1;
+	j = 0;
+	while (1) {
+		size_t namelen = 0;
+
+		buf[j] = '/';
+		i--;
+		j++;
+
+		while (i && rpath[i] != '/') {
+			namelen++;
+			i--;
+		}
+
+		if (!i) {
+			namelen++;
+			memcpy(buf + j, rpath, namelen);
+			j += namelen;
+			break;
+		}
+
+		memcpy(buf + j, rpath + i + 1, namelen);
+		j += namelen;
+	}
+	buf[j] = '\0';
+
+	return 0;
+}
+
+int ext2_ftruncate(ext2_blkdev_t *dev, u32 inum, size_t sz)
 {
 	int err;
 	ext2_inode_t inode;
@@ -2777,14 +2890,14 @@ int ext2_truncate(ext2_blkdev_t *dev, const char *path, size_t sz,
 	if (err) {
 		return err;
 	}
-	err = ext2_regular_truncate(dev, inum, sz);
+	err = ext2_ftruncate(dev, inum, sz);
 	if (err) {
 		return err;
 	}
 	return 0;
 }
 
-int ext2_istat(ext2_blkdev_t *dev, u32 inum, struct stat *st)
+int ext2_fstat(ext2_blkdev_t *dev, u32 inum, struct stat *st)
 {
 	int err;
 	ext2_inode_t inode;
@@ -2822,7 +2935,7 @@ int ext2_stat(ext2_blkdev_t *dev, const char *path, struct stat *st,
 		return err;
 	}
 
-	err = ext2_istat(dev, inum, st);
+	err = ext2_fstat(dev, inum, st);
 	if (err) {
 		return err;
 	}
@@ -2874,16 +2987,10 @@ ssize_t ext2_regular_write(ext2_blkdev_t *dev, u32 inum, void *buf, u64 len, u64
 	return len;
 }
 
-int ext2_chdir(ext2_blkdev_t *dev, const char *path, u32 *cwd)
+int ext2_fchdir(ext2_blkdev_t *dev, u32 inum, u32 *cwd)
 {
 	int err;
-	u32 inum;
 	ext2_inode_t inode;
-
-	err = ext2_file_lookup(dev, path, &inum, *cwd, true);
-	if (err) {
-		return err;
-	}
 
 	err = ext2_inode_read(dev, inum, &inode);
 	if (err) {
@@ -2895,6 +3002,27 @@ int ext2_chdir(ext2_blkdev_t *dev, const char *path, u32 *cwd)
 	}
 
 	*cwd = inum;
+
+	return 0;
+}
+
+int ext2_getcwd(ext2_blkdev_t *dev, u32 inum, char *buf, size_t size)
+{
+	int err;
+	char path[PATH_MAX];
+	size_t pathlen;
+
+	err = ext2_directory_absolute_path(dev, inum, path);
+	if (err) {
+		return err;
+	}
+	
+	pathlen = strlen(path) + 1;
+	if (pathlen > size) {
+		return -ERANGE;
+	}
+
+	memcpy(buf, path, pathlen);
 
 	return 0;
 }

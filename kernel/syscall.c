@@ -68,10 +68,6 @@ void syscall(void)
 	case SYS_sbrk:
 		break;
 
-	case SYS_stat:
-		ret = sys_stat((void *) tf->a0, (void *) tf->a1);
-		break;
-
 	case SYS_times:
 		break;
 
@@ -87,8 +83,8 @@ void syscall(void)
 		ret = sys_write(tf->a0, (void *) tf->a1, tf->a2);
 		break;
 
-	case SYS_chdir:
-		ret = sys_chdir((void *) tf->a0);
+	case SYS_fchdir:
+		ret = sys_fchdir(tf->a0);
 		break;
 
 	case SYS_mkdir:
@@ -109,6 +105,18 @@ void syscall(void)
 
 	case SYS_symlink:
 		ret = sys_symlink((void *) tf->a0, (void *) tf->a1);
+		break;
+
+	case SYS_ftruncate:
+		ret = sys_ftruncate(tf->a0, tf->a1);
+		break;
+
+	case SYS_mknod:
+
+		break;
+
+	case SYS_getcwd:
+		ret = sys_getcwd((void *) tf->a0, tf->a1);
 		break;
 
 	default:

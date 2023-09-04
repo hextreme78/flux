@@ -335,7 +335,7 @@ off_t sys_lseek(int fd, off_t offset, int whence)
 	} else if (whence == SEEK_END) {
 		struct stat st;
 		mutex_lock(&rootblkdev->lock);
-		err = ext2_istat(rootblkdev, curproc()->filetable[fd].inum, &st);
+		err = ext2_fstat(rootblkdev, curproc()->filetable[fd].inum, &st);
 		if (err) {
 			mutex_unlock(&rootblkdev->lock);
 			return err;
@@ -359,36 +359,6 @@ int sys_close(int fd)
 	return 0;
 }
 
-int sys_stat(const char *path, struct stat *st)
-{
-	int err;
-	size_t pathlen;
-	struct stat stbuf;
-
-	pathlen = strnlen_user(path, PATH_MAX);
-	if (pathlen > PATH_MAX) {
-		return -ENAMETOOLONG;
-	}
-	char pathbuf[pathlen];
-	if (copy_from_user(pathbuf, path, pathlen)) {
-		return -EFAULT;
-	}
-
-	mutex_lock(&rootblkdev->lock);
-	err = ext2_stat(rootblkdev, pathbuf, &stbuf, curproc()->cwd);
-	if (err) {
-		mutex_unlock(&rootblkdev->lock);
-		return err;
-	}
-	mutex_unlock(&rootblkdev->lock);
-
-	if (copy_to_user(st, &stbuf, sizeof(*st))) {
-		return -EFAULT;
-	}
-
-	return 0;
-}
-
 int sys_fstat(int fd, struct stat *st)
 {
 	int err;
@@ -399,7 +369,7 @@ int sys_fstat(int fd, struct stat *st)
 	}
 
 	mutex_lock(&rootblkdev->lock);
-	err = ext2_istat(rootblkdev, curproc()->filetable[fd].inum, &stbuf);
+	err = ext2_fstat(rootblkdev, curproc()->filetable[fd].inum, &stbuf);
 	if (err) {
 		mutex_unlock(&rootblkdev->lock);
 		return err;
@@ -413,22 +383,16 @@ int sys_fstat(int fd, struct stat *st)
 	return 0;
 }
 
-int sys_chdir(const char *path)
+int sys_fchdir(int fd)
 {
 	int err;
-	size_t pathlen;
 
-	pathlen = strnlen_user(path, PATH_MAX);
-	if (pathlen > PATH_MAX) {
-		return -ENAMETOOLONG;
-	}
-	char pathbuf[pathlen];
-	if (copy_from_user(pathbuf, path, pathlen)) {
-		return -EFAULT;
+	if (fd >= FD_MAX || !curproc()->filetable[fd].inum) {
+		return -EBADFD;
 	}
 
 	mutex_lock(&rootblkdev->lock);
-	err = ext2_chdir(rootblkdev, pathbuf, &curproc()->cwd);
+	err = ext2_fchdir(rootblkdev, curproc()->filetable[fd].inum, &curproc()->cwd);
 	if (err) {
 		mutex_unlock(&rootblkdev->lock);
 		return err;
@@ -469,6 +433,45 @@ int sys_symlink(const char *path1, const char *path2)
 		return err;
 	}
 	mutex_unlock(&rootblkdev->lock);
+
+	return 0;
+}
+
+int sys_ftruncate(int fd, off_t length)
+{
+	int err;
+
+	if (fd >= FD_MAX || !curproc()->filetable[fd].inum) {
+		return -EBADFD;
+	}
+
+	mutex_lock(&rootblkdev->lock);
+	err = ext2_ftruncate(rootblkdev, curproc()->filetable[fd].inum, length);
+	if (err) {
+		mutex_unlock(&rootblkdev->lock);
+		return err;
+	}
+	mutex_unlock(&rootblkdev->lock);
+
+	return 0;
+}
+
+int sys_getcwd(char *buf, size_t size)
+{
+	int err;
+	char pathbuf[PATH_MAX];
+
+	mutex_lock(&rootblkdev->lock);
+	err = ext2_getcwd(rootblkdev, curproc()->cwd, pathbuf, size);
+	if (err) {
+		mutex_unlock(&rootblkdev->lock);
+		return err;
+	}
+	mutex_unlock(&rootblkdev->lock);
+
+	if (copy_to_user(buf, pathbuf, strlen(pathbuf))) {
+		return -EFAULT;
+	}
 
 	return 0;
 }

@@ -1,12 +1,12 @@
 #include <syscall.h>
-#include <sys/stat.h>
+#include <sys/types.h>
 #include <errno.h>
 #undef errno
 extern int errno;
 
-int fstat(int fd, struct stat *statbuf)
+int ftruncate(int fd, off_t length)
 {
-	long result = syscall(SYS_fstat, fd, statbuf);
+	long result = syscall(SYS_ftruncate, fd, length);
 	if (result < 0) {
 		errno = -result;
 		return -1;

@@ -294,14 +294,16 @@ int ext2_unlink(ext2_blkdev_t *dev, const char *path, u32 relinum);
 int ext2_rmdir(ext2_blkdev_t *dev, const char *path, u32 relinum);
 int ext2_rename(ext2_blkdev_t *dev, const char *oldpath, const char *newpath,
 		u32 relinum);
+int ext2_ftruncate(ext2_blkdev_t *dev, u32 inum, size_t sz);
 int ext2_truncate(ext2_blkdev_t *dev, const char *path, size_t sz,
 		u32 relinum);
-int ext2_istat(ext2_blkdev_t *dev, u32 inum, struct stat *st);
+int ext2_fstat(ext2_blkdev_t *dev, u32 inum, struct stat *st);
 int ext2_stat(ext2_blkdev_t *dev, const char *path, struct stat *st,
 		u32 relinum);
 ssize_t ext2_regular_read(ext2_blkdev_t *dev, u32 inum, void *buf, u64 len, u64 offset);
 ssize_t ext2_regular_write(ext2_blkdev_t *dev, u32 inum, void *buf, u64 len, u64 offset);
-int ext2_chdir(ext2_blkdev_t *dev, const char *path, u32 *cwd);
+int ext2_fchdir(ext2_blkdev_t *dev, u32 inum, u32 *cwd);
+int ext2_getcwd(ext2_blkdev_t *dev, u32 inum, char *buf, size_t size);
 
 #endif
 

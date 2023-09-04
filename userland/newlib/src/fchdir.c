@@ -1,12 +1,11 @@
 #include <syscall.h>
-#include <sys/stat.h>
 #include <errno.h>
 #undef errno
 extern int errno;
 
-int fstat(int fd, struct stat *statbuf)
+int fchdir(int fd)
 {
-	long result = syscall(SYS_fstat, fd, statbuf);
+	long result = syscall(SYS_fchdir, fd);
 	if (result < 0) {
 		errno = -result;
 		return -1;

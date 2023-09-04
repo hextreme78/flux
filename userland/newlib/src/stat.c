@@ -1,18 +1,18 @@
-#include <syscall.h>
-#include <sys/types.h>
-#include <errno.h>
-#undef errno
-extern int errno;
-
-struct stat;
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/stat.h>
 
 int stat(const char *restrict pathname, struct stat *restrict statbuf)
 {
-	long result = syscall(SYS_stat, pathname, statbuf);
-	if (result < 0) {
-		errno = -result;
+	int fd = open(pathname, O_RDONLY);
+	if (fd < 0) {
 		return -1;
 	}
-	return result;
+	if (fstat(fd, statbuf) < 0) {
+		close(fd);
+		return -1;
+	}
+	close(fd);
+	return 0;
 }
 
