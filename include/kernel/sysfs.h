@@ -20,6 +20,7 @@ int sys_symlink(const char *path1, const char *path2);
 int sys_fstat(int fd, struct stat *st);
 int sys_ftruncate(int fd, off_t length);
 int sys_getcwd(char *buf, size_t size);
+int sys_fcntl(int fd, int cmd, int arg);
 
 #endif
 

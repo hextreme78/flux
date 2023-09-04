@@ -206,24 +206,40 @@ int sys_open(const char *path, int flags, mode_t mode)
 		return -EMFILE;
 	}
 
+	curproc()->filetable[fd].status_flags = kmalloc(sizeof(int));
+	if (!curproc()->filetable[fd].status_flags) {
+		return -ENOMEM;
+	}
+	curproc()->filetable[fd].offset = kmalloc(sizeof(off_t));
+	if (!curproc()->filetable[fd].offset) {
+		kfree(curproc()->filetable[fd].status_flags);
+		return -ENOMEM;
+	}
+
 	mutex_lock(&rootblkdev->lock);
 	if (flags & O_CREAT) {
 		err = ext2_creat(rootblkdev, pathbuf, mode, curproc()->uid,
 				curproc()->gid, curproc()->cwd);
 		if (err && (err != -EEXIST || (err == -EEXIST && (flags & O_EXCL)))) {
 			mutex_unlock(&rootblkdev->lock);
+			kfree(curproc()->filetable[fd].status_flags);
+			kfree(curproc()->filetable[fd].offset);
 			return err;
 		}
 	}
 	err = ext2_file_lookup(rootblkdev, pathbuf, &inum, curproc()->cwd, true);
 	if (err) {
 		mutex_unlock(&rootblkdev->lock);
+		kfree(curproc()->filetable[fd].status_flags);
+		kfree(curproc()->filetable[fd].offset);
 		return err;
 	}
-	if ((flags & O_TRUNC) && ((flags + 1) & (O_WRONLY + 1))) {
+	if ((flags & O_TRUNC) && ((flags & O_ACCMODE) != O_RDONLY)) {
 		err = ext2_truncate(rootblkdev, pathbuf, 0, curproc()->cwd);
 		if (err) {
 			mutex_unlock(&rootblkdev->lock);
+			kfree(curproc()->filetable[fd].status_flags);
+			kfree(curproc()->filetable[fd].offset);
 			return err;
 		}
 	}
@@ -233,16 +249,23 @@ int sys_open(const char *path, int flags, mode_t mode)
 		err = ext2_stat(rootblkdev, pathbuf, &st, curproc()->cwd);
 		if (err) {
 			mutex_unlock(&rootblkdev->lock);
+			kfree(curproc()->filetable[fd].status_flags);
+			kfree(curproc()->filetable[fd].offset);
 			return err;
 		}
-		curproc()->filetable[fd].offset = st.st_size;
+		*curproc()->filetable[fd].offset = st.st_size;
 	} else {
-		curproc()->filetable[fd].offset = 0;
+		*curproc()->filetable[fd].offset = 0;
 	}
 	mutex_unlock(&rootblkdev->lock);
 
 	curproc()->filetable[fd].inum = inum;
-	curproc()->filetable[fd].flags = flags;
+	*curproc()->filetable[fd].status_flags = flags;
+	if (flags & O_CLOEXEC) {
+		curproc()->filetable[fd].fd_flags = FD_CLOEXEC;
+	} else {
+		curproc()->filetable[fd].fd_flags = 0;
+	}
 
 	return fd;
 }
@@ -250,11 +273,11 @@ int sys_open(const char *path, int flags, mode_t mode)
 ssize_t sys_read(int fd, void *buf, size_t count)
 {
 	void *kbuf;
-	if (fd >= FD_MAX || !curproc()->filetable[fd].inum) {
+	if (fd < 0 || fd >= FD_MAX || !curproc()->filetable[fd].inum) {
 		return -EBADFD;
 	}
-	if (!((curproc()->filetable[fd].flags + 1) & (O_RDONLY + 1))) {
-		return -EBADF;
+	if ((*curproc()->filetable[fd].status_flags & O_ACCMODE) == O_WRONLY) {
+		return -EBADFD;
 	}
 
 	if (!(kbuf = kmalloc(count))) {
@@ -264,7 +287,7 @@ ssize_t sys_read(int fd, void *buf, size_t count)
 	mutex_lock(&rootblkdev->lock);
 	count = ext2_regular_read(rootblkdev,
 			curproc()->filetable[fd].inum, kbuf, count,
-			curproc()->filetable[fd].offset);
+			*curproc()->filetable[fd].offset);
 	if (count < 0) {
 		mutex_unlock(&rootblkdev->lock);
 		kfree(kbuf);
@@ -279,7 +302,7 @@ ssize_t sys_read(int fd, void *buf, size_t count)
 
 	kfree(kbuf);
 
-	curproc()->filetable[fd].offset += count;
+	*curproc()->filetable[fd].offset += count;
 
 	return count;
 }
@@ -287,11 +310,11 @@ ssize_t sys_read(int fd, void *buf, size_t count)
 ssize_t sys_write(int fd, const void *buf, size_t count)
 {
 	void *kbuf;
-	if (fd >= FD_MAX || !curproc()->filetable[fd].inum) {
+	if (fd < 0 || fd >= FD_MAX || !curproc()->filetable[fd].inum) {
 		return -EBADFD;
 	}
-	if (!((curproc()->filetable[fd].flags + 1) & (O_WRONLY + 1))) {
-		return -EBADF;
+	if ((*curproc()->filetable[fd].status_flags & O_ACCMODE) == O_RDONLY) {
+		return -EBADFD;
 	}
 
 	if (!(kbuf = kmalloc(count))) {
@@ -306,7 +329,7 @@ ssize_t sys_write(int fd, const void *buf, size_t count)
 	mutex_lock(&rootblkdev->lock);
 	count = ext2_regular_write(rootblkdev,
 			curproc()->filetable[fd].inum, kbuf, count,
-			curproc()->filetable[fd].offset);
+			*curproc()->filetable[fd].offset);
 	if (count < 0) {
 		mutex_unlock(&rootblkdev->lock);
 		kfree(kbuf);
@@ -316,7 +339,7 @@ ssize_t sys_write(int fd, const void *buf, size_t count)
 
 	kfree(kbuf);
 
-	curproc()->filetable[fd].offset += count;
+	*curproc()->filetable[fd].offset += count;
 
 	return count;
 }
@@ -324,14 +347,14 @@ ssize_t sys_write(int fd, const void *buf, size_t count)
 off_t sys_lseek(int fd, off_t offset, int whence)
 {
 	int err;
-	if (fd >= FD_MAX || !curproc()->filetable[fd].inum) {
+	if (fd < 0 || fd >= FD_MAX || !curproc()->filetable[fd].inum) {
 		return -EBADFD;
 	}
 
 	if (whence == SEEK_SET) {
-		curproc()->filetable[fd].offset = offset;
+		*curproc()->filetable[fd].offset = offset;
 	} else if (whence == SEEK_CUR) {
-		curproc()->filetable[fd].offset += offset;
+		*curproc()->filetable[fd].offset += offset;
 	} else if (whence == SEEK_END) {
 		struct stat st;
 		mutex_lock(&rootblkdev->lock);
@@ -341,20 +364,22 @@ off_t sys_lseek(int fd, off_t offset, int whence)
 			return err;
 		}
 		mutex_unlock(&rootblkdev->lock);
-		curproc()->filetable[fd].offset = st.st_size + offset;
+		*curproc()->filetable[fd].offset = st.st_size + offset;
 	} else {
 		return -EINVAL;
 	}
 
-	return curproc()->filetable[fd].offset;
+	return *curproc()->filetable[fd].offset;
 }
 
 int sys_close(int fd)
 {
-	if (fd >= FD_MAX || !curproc()->filetable[fd].inum) {
+	if (fd < 0 || fd >= FD_MAX || !curproc()->filetable[fd].inum) {
 		return -EBADFD;
 	}
 	curproc()->filetable[fd].inum = 0;
+	kfree(curproc()->filetable[fd].status_flags);
+	kfree(curproc()->filetable[fd].offset);
 
 	return 0;
 }
@@ -364,7 +389,7 @@ int sys_fstat(int fd, struct stat *st)
 	int err;
 	struct stat stbuf;
 
-	if (fd >= FD_MAX || !curproc()->filetable[fd].inum) {
+	if (fd < 0 || fd >= FD_MAX || !curproc()->filetable[fd].inum) {
 		return -EBADFD;
 	}
 
@@ -387,7 +412,7 @@ int sys_fchdir(int fd)
 {
 	int err;
 
-	if (fd >= FD_MAX || !curproc()->filetable[fd].inum) {
+	if (fd < 0 || fd >= FD_MAX || !curproc()->filetable[fd].inum) {
 		return -EBADFD;
 	}
 
@@ -441,7 +466,10 @@ int sys_ftruncate(int fd, off_t length)
 {
 	int err;
 
-	if (fd >= FD_MAX || !curproc()->filetable[fd].inum) {
+	if (fd < 0 || fd >= FD_MAX || !curproc()->filetable[fd].inum) {
+		return -EBADFD;
+	}
+	if ((*curproc()->filetable[fd].status_flags & O_ACCMODE) == O_RDONLY) {
 		return -EBADFD;
 	}
 
@@ -471,6 +499,48 @@ int sys_getcwd(char *buf, size_t size)
 
 	if (copy_to_user(buf, pathbuf, strlen(pathbuf))) {
 		return -EFAULT;
+	}
+
+	return 0;
+}
+
+int sys_fcntl(int fd, int cmd, int arg)
+{
+	int dupfd = -1;
+	if (fd < 0 || fd >= FD_MAX || !curproc()->filetable[fd].inum) {
+		return -EBADFD;
+	}
+
+	switch (cmd) {
+	case F_DUPFD:
+		for (int i = arg; i < FD_MAX; i++) {
+			if (!curproc()->filetable[i].inum) {
+				dupfd = i;
+			}
+		}
+		if (fd < 0) {
+			return -EMFILE;
+		}
+		curproc()->filetable[dupfd].inum = curproc()->filetable[fd].inum;
+		curproc()->filetable[dupfd].fd_flags =
+			curproc()->filetable[fd].fd_flags;
+		curproc()->filetable[dupfd].status_flags =
+			curproc()->filetable[fd].status_flags;
+		curproc()->filetable[dupfd].offset =
+			curproc()->filetable[fd].offset;
+		return dupfd;
+	case F_GETFD:
+		return curproc()->filetable[fd].fd_flags;
+	case F_SETFD:
+		curproc()->filetable[fd].fd_flags = arg;
+		break;
+	case F_SETFL:
+		*curproc()->filetable[fd].status_flags = arg;
+		break;
+	case F_GETFL:
+		return *curproc()->filetable[fd].status_flags;
+	default:
+		return -EINVAL;
 	}
 
 	return 0;

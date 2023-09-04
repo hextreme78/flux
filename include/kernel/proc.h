@@ -113,8 +113,9 @@ struct segment {
 
 struct filedesc {
 	u32 inum;
-	int flags;
-	off_t offset;
+	int fd_flags;
+	int *status_flags;
+	off_t *offset;
 };
 
 struct proc {

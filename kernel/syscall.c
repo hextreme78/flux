@@ -119,6 +119,10 @@ void syscall(void)
 		ret = sys_getcwd((void *) tf->a0, tf->a1);
 		break;
 
+	case SYS_fcntl:
+		ret = sys_fcntl(tf->a0, tf->a1, tf->a1);
+		break;
+
 	default:
 		kprintf_s("unknown syscall %u\n", sysnum);
 	}

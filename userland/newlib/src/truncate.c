@@ -5,7 +5,7 @@ int ftruncate(int fd, off_t length);
 
 int truncate(const char *path, off_t length)
 {
-	int fd = open(path, O_RDONLY);
+	int fd = open(path, O_WRONLY);
 	if (fd < 0) {
 		return -1;
 	}
