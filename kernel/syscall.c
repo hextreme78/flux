@@ -135,6 +135,26 @@ void syscall(void)
 		ret = sys_dup3(tf->a0, tf->a1, tf->a2);
 		break;
 
+	case SYS_lstat:
+		ret = sys_lstat((void *) tf->a0, (void *) tf->a1);
+		break;
+
+	case SYS_umask:
+		ret = sys_umask(tf->a0);
+		break;
+
+	case SYS_fchmod:
+		ret = sys_fchmod(tf->a0, tf->a1);
+		break;
+
+	case SYS_fchown:
+		ret = sys_fchown(tf->a0, tf->a1, tf->a2);
+		break;
+
+	case SYS_lchown:
+		ret = sys_lchown((void *) tf->a0, tf->a1, tf->a2);
+		break;
+
 	default:
 		kprintf_s("unknown syscall %u\n", sysnum);
 	}

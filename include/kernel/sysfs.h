@@ -24,6 +24,11 @@ int sys_fcntl(int fd, int cmd, int arg);
 int sys_dup(int oldfd);
 int sys_dup2(int oldfd, int newfd);
 int sys_dup3(int oldfd, int newfd, int flags);
+int sys_lstat(const char *path, struct stat *st);
+mode_t sys_umask(mode_t mask);
+int sys_fchmod(int fd, mode_t mode);
+int sys_fchown(int fd, uid_t uid, gid_t gid);
+int sys_lchown(const char *path, uid_t uid, gid_t gid);
 
 #endif
 

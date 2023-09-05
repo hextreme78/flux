@@ -3027,28 +3027,91 @@ int ext2_getcwd(ext2_blkdev_t *dev, u32 inum, char *buf, size_t size)
 	return 0;
 }
 
-int ext2_permission_check(ext2_blkdev_t *dev, u32 inum, u16 uid, u16 gid)
+int ext2_lstat(ext2_blkdev_t *dev, const char *path, struct stat *st, u32 relinum)
+{
+	int err;
+	u32 inum;
+
+	err = ext2_file_lookup(dev, path, &inum, relinum, false);
+	if (err) {
+		return err;
+	}
+
+	err = ext2_fstat(dev, inum, st);
+	if (err) {
+		return err;
+	}
+
+	return 0;
+}
+
+int ext2_fchmod(ext2_blkdev_t *dev, u32 inum, u16 mode)
+{
+	int err;
+	ext2_inode_t inode;
+
+	err = ext2_inode_read(dev, inum, &inode);
+	if (err) {
+		return err;
+	}
+
+	inode.i_mode = mode | (inode.i_mode & EXT2_FILE_FORMAT_MASK);
+
+	err = ext2_inode_write(dev, inum, &inode);
+	if (err) {
+		return err;
+	}
+
+	return 0;
+}
+
+int ext2_fchown(ext2_blkdev_t *dev, u32 inum, u16 uid, u16 gid)
+{
+	int err;
+	ext2_inode_t inode;
+
+	err = ext2_inode_read(dev, inum, &inode);
+	if (err) {
+		return err;
+	}
+
+	inode.i_uid = uid;
+	inode.i_gid = gid;
+
+	err = ext2_inode_write(dev, inum, &inode);
+	if (err) {
+		return err;
+	}
+
+	return 0;
+}
+
+int ext2_lchown(ext2_blkdev_t *dev, const char *path, u16 uid, u16 gid, u32 relinum)
+{
+	int err;
+	u32 inum;
+
+	err = ext2_file_lookup(dev, path, &inum, relinum, false);
+	if (err) {
+		return err;
+	}
+
+	err = ext2_fchown(dev, inum, uid, gid);
+	if (err) {
+		return err;
+	}
+
+	return 0;
+}
+
+int ext2_access(ext2_blkdev_t *dev, u32 inum, u16 uid, u16 gid)
 {
 	/* not implemented */
 
 	return 0;
 }
 
-int ext2_setattr(ext2_blkdev_t *dev, u32 inum, u16 attr)
-{
-	/* not implemented */
-
-	return 0;
-}
-
-int ext2_getattr(ext2_blkdev_t *dev, u32 inum, u16 *attr)
-{
-	/* not implemented */
-
-	return 0;
-}
-
-int ext2_update_time(ext2_blkdev_t *dev, u32 inum)
+int ext2_utime(ext2_blkdev_t *dev, u32 inum)
 {
 	/* not implemented */
 

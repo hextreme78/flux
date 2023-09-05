@@ -143,6 +143,7 @@ struct proc {
 	u32 cwd;
 
 	fd_t filetable[FD_MAX];
+	mode_t umask;
 };
 
 void proc_init(void);
