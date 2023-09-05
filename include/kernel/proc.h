@@ -116,6 +116,7 @@ struct filedesc {
 	int fd_flags;
 	int *status_flags;
 	off_t *offset;
+	size_t *refcnt;
 };
 
 struct proc {

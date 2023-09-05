@@ -120,7 +120,19 @@ void syscall(void)
 		break;
 
 	case SYS_fcntl:
-		ret = sys_fcntl(tf->a0, tf->a1, tf->a1);
+		ret = sys_fcntl(tf->a0, tf->a1, tf->a2);
+		break;
+
+	case SYS_dup:
+		ret = sys_dup(tf->a0);
+		break;
+
+	case SYS_dup2:
+		ret = sys_dup2(tf->a0, tf->a1);
+		break;
+	
+	case SYS_dup3:
+		ret = sys_dup3(tf->a0, tf->a1, tf->a2);
 		break;
 
 	default:

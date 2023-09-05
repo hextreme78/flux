@@ -215,6 +215,12 @@ int sys_open(const char *path, int flags, mode_t mode)
 		kfree(curproc()->filetable[fd].status_flags);
 		return -ENOMEM;
 	}
+	curproc()->filetable[fd].refcnt = kmalloc(sizeof(size_t));
+	if (!curproc()->filetable[fd].offset) {
+		kfree(curproc()->filetable[fd].status_flags);
+		kfree(curproc()->filetable[fd].offset);
+		return -ENOMEM;
+	}
 
 	mutex_lock(&rootblkdev->lock);
 	if (flags & O_CREAT) {
@@ -224,12 +230,14 @@ int sys_open(const char *path, int flags, mode_t mode)
 			mutex_unlock(&rootblkdev->lock);
 			kfree(curproc()->filetable[fd].status_flags);
 			kfree(curproc()->filetable[fd].offset);
+			kfree(curproc()->filetable[fd].refcnt);
 			return err;
 		}
 	}
 	err = ext2_file_lookup(rootblkdev, pathbuf, &inum, curproc()->cwd, true);
 	if (err) {
 		mutex_unlock(&rootblkdev->lock);
+		kfree(curproc()->filetable[fd].refcnt);
 		kfree(curproc()->filetable[fd].status_flags);
 		kfree(curproc()->filetable[fd].offset);
 		return err;
@@ -238,6 +246,7 @@ int sys_open(const char *path, int flags, mode_t mode)
 		err = ext2_truncate(rootblkdev, pathbuf, 0, curproc()->cwd);
 		if (err) {
 			mutex_unlock(&rootblkdev->lock);
+			kfree(curproc()->filetable[fd].refcnt);
 			kfree(curproc()->filetable[fd].status_flags);
 			kfree(curproc()->filetable[fd].offset);
 			return err;
@@ -249,6 +258,7 @@ int sys_open(const char *path, int flags, mode_t mode)
 		err = ext2_stat(rootblkdev, pathbuf, &st, curproc()->cwd);
 		if (err) {
 			mutex_unlock(&rootblkdev->lock);
+			kfree(curproc()->filetable[fd].refcnt);
 			kfree(curproc()->filetable[fd].status_flags);
 			kfree(curproc()->filetable[fd].offset);
 			return err;
@@ -266,6 +276,7 @@ int sys_open(const char *path, int flags, mode_t mode)
 	} else {
 		curproc()->filetable[fd].fd_flags = 0;
 	}
+	*curproc()->filetable[fd].refcnt = 1;
 
 	return fd;
 }
@@ -378,9 +389,12 @@ int sys_close(int fd)
 		return -EBADFD;
 	}
 	curproc()->filetable[fd].inum = 0;
-	kfree(curproc()->filetable[fd].status_flags);
-	kfree(curproc()->filetable[fd].offset);
-
+	--*curproc()->filetable[fd].refcnt;
+	if (!*curproc()->filetable[fd].refcnt) {
+		kfree(curproc()->filetable[fd].refcnt);
+		kfree(curproc()->filetable[fd].status_flags);
+		kfree(curproc()->filetable[fd].offset);
+	}
 	return 0;
 }
 
@@ -513,17 +527,39 @@ int sys_fcntl(int fd, int cmd, int arg)
 
 	switch (cmd) {
 	case F_DUPFD:
+		if (arg < 0) {
+			return -EBADFD;
+		}
 		for (int i = arg; i < FD_MAX; i++) {
 			if (!curproc()->filetable[i].inum) {
 				dupfd = i;
 			}
 		}
-		if (fd < 0) {
+		if (dupfd < 0) {
 			return -EMFILE;
 		}
 		curproc()->filetable[dupfd].inum = curproc()->filetable[fd].inum;
 		curproc()->filetable[dupfd].fd_flags =
 			curproc()->filetable[fd].fd_flags;
+		curproc()->filetable[dupfd].status_flags =
+			curproc()->filetable[fd].status_flags;
+		curproc()->filetable[dupfd].offset =
+			curproc()->filetable[fd].offset;
+		return dupfd;
+	case F_DUPFD_CLOEXEC:
+		if (arg < 0) {
+			return -EBADFD;
+		}
+		for (int i = arg; i < FD_MAX; i++) {
+			if (!curproc()->filetable[i].inum) {
+				dupfd = i;
+			}
+		}
+		if (dupfd < 0) {
+			return -EMFILE;
+		}
+		curproc()->filetable[dupfd].inum = curproc()->filetable[fd].inum;
+		curproc()->filetable[dupfd].fd_flags = FD_CLOEXEC;
 		curproc()->filetable[dupfd].status_flags =
 			curproc()->filetable[fd].status_flags;
 		curproc()->filetable[dupfd].offset =
@@ -544,5 +580,90 @@ int sys_fcntl(int fd, int cmd, int arg)
 	}
 
 	return 0;
+}
+
+int sys_dup(int oldfd)
+{
+	int dupfd = -1;
+	if (oldfd < 0 || oldfd >= FD_MAX || !curproc()->filetable[oldfd].inum) {
+		return -EBADFD;
+	}
+	for (int i = 0; i < FD_MAX; i++) {
+		if (!curproc()->filetable[i].inum) {
+			dupfd = i;
+		}
+	}
+	if (dupfd < 0) {
+		return -EMFILE;
+	}
+	curproc()->filetable[dupfd].inum = curproc()->filetable[oldfd].inum;
+	curproc()->filetable[dupfd].fd_flags =
+		curproc()->filetable[oldfd].fd_flags;
+	curproc()->filetable[dupfd].status_flags =
+		curproc()->filetable[oldfd].status_flags;
+	curproc()->filetable[dupfd].offset =
+		curproc()->filetable[oldfd].offset;
+	curproc()->filetable[dupfd].refcnt =
+		curproc()->filetable[oldfd].refcnt;
+	*curproc()->filetable[dupfd].refcnt++;
+	return dupfd;
+}
+
+int sys_dup2(int oldfd, int newfd)
+{
+	if (oldfd < 0 || oldfd >= FD_MAX || !curproc()->filetable[oldfd].inum) {
+		return -EBADFD;
+	}
+	if (newfd < 0 || newfd >= FD_MAX) {
+		return -EBADFD;
+	}
+	if (curproc()->filetable[newfd].inum) {
+		--*curproc()->filetable[newfd].refcnt;
+		if (!*curproc()->filetable[newfd].refcnt) {
+			kfree(curproc()->filetable[newfd].refcnt);
+			kfree(curproc()->filetable[newfd].status_flags);
+			kfree(curproc()->filetable[newfd].offset);
+		}
+	}
+	curproc()->filetable[newfd].inum = curproc()->filetable[oldfd].inum;
+	curproc()->filetable[newfd].fd_flags = curproc()->filetable[oldfd].fd_flags;
+	curproc()->filetable[newfd].status_flags =
+		curproc()->filetable[oldfd].status_flags;
+	curproc()->filetable[newfd].offset = curproc()->filetable[oldfd].offset;
+	curproc()->filetable[newfd].refcnt = curproc()->filetable[oldfd].refcnt;
+	++*curproc()->filetable[newfd].refcnt;
+	return newfd;
+}
+
+int sys_dup3(int oldfd, int newfd, int flags)
+{
+	if (oldfd < 0 || oldfd >= FD_MAX || !curproc()->filetable[oldfd].inum) {
+		return -EBADFD;
+	}
+	if (newfd < 0 || newfd >= FD_MAX) {
+		return -EBADFD;
+	}
+	if (newfd == oldfd) {
+		return -EINVAL;
+	}
+	if (curproc()->filetable[newfd].inum) {
+		--*curproc()->filetable[newfd].refcnt;
+		if (!*curproc()->filetable[newfd].refcnt) {
+			kfree(curproc()->filetable[newfd].refcnt);
+			kfree(curproc()->filetable[newfd].status_flags);
+			kfree(curproc()->filetable[newfd].offset);
+		}
+	}
+	curproc()->filetable[newfd].inum = curproc()->filetable[oldfd].inum;
+	if (flags & O_CLOEXEC) {
+		curproc()->filetable[newfd].fd_flags = FD_CLOEXEC;
+	} else {
+		curproc()->filetable[newfd].fd_flags = 0;
+	}
+	curproc()->filetable[newfd].status_flags =
+		curproc()->filetable[oldfd].status_flags;
+	curproc()->filetable[newfd].offset = curproc()->filetable[oldfd].offset;
+	++*curproc()->filetable[newfd].refcnt;
+	return newfd;
 }
 
