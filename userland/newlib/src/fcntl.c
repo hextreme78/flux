@@ -1,7 +1,5 @@
 #include <syscall.h>
 #include <errno.h>
-#undef errno
-extern int errno;
 
 int fcntl(int fd, int flags, int arg)
 {

@@ -1,7 +1,5 @@
 #include <syscall.h>
 #include <errno.h>
-#undef errno
-extern int errno;
 
 struct stat;
 

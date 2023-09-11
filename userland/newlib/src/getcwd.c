@@ -1,8 +1,6 @@
 #include <syscall.h>
 #include <stddef.h>
 #include <errno.h>
-#undef errno
-extern int errno;
 
 char *getcwd(char *buf, size_t size)
 {

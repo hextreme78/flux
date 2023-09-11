@@ -1,7 +1,5 @@
 #include <syscall.h>
 #include <errno.h>
-#undef errno
-extern int errno;
 
 int dup3(int oldfd, int newfd, int flags)
 {

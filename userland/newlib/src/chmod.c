@@ -1,8 +1,6 @@
 #include <syscall.h>
 #include <sys/types.h>
 #include <errno.h>
-#undef errno
-extern int errno;
 
 int chmod(const char *path, mode_t mode)
 {

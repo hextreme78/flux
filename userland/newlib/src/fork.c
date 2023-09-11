@@ -1,8 +1,6 @@
 #include <syscall.h>
 #include <sys/types.h>
 #include <errno.h>
-#undef errno
-extern int errno;
 
 pid_t fork(void)
 {

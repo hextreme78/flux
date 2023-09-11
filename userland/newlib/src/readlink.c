@@ -1,8 +1,6 @@
 #include <syscall.h>
 #include <sys/types.h>
 #include <errno.h>
-#undef errno
-extern int errno;
 
 ssize_t readlink(const char *restrict pathname, char *restrict buf, size_t bufsiz)
 {

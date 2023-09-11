@@ -1,8 +1,6 @@
 #include <syscall.h>
 #include <sys/types.h>
 #include <errno.h>
-#undef errno
-extern int errno;
 
 int ftruncate(int fd, off_t length)
 {

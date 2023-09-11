@@ -1,7 +1,5 @@
 #include <syscall.h>
 #include <errno.h>
-#undef errno
-extern int errno;
 
 int symlink(const char *target, const char *linkpath)
 {

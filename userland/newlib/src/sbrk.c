@@ -1,8 +1,6 @@
 #include <syscall.h>
 #include <stdint.h>
 #include <errno.h>
-#undef errno
-extern int errno;
 
 void *sbrk(intptr_t increment)
 {

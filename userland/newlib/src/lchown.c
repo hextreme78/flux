@@ -1,10 +1,6 @@
 #include <syscall.h>
 #include <sys/types.h>
 #include <errno.h>
-#undef errno
-extern int errno;
-
-struct stat;
 
 int lchown(const char *pathname, uid_t uid, gid_t gid)
 {
