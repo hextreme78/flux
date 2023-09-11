@@ -5,7 +5,16 @@
 #include <kernel/sysproc.h>
 #include <kernel/sysfs.h>
 
-#include <kernel/ext2.h>
+void debug_print(const char *str)
+{
+	size_t len;
+	len = strlen_user(str);
+	char strbuf[len];
+	if (copy_from_user(strbuf, str, len)) {
+		return;
+	}
+	kprintf_s(strbuf);
+}
 
 void syscall(void)
 {
@@ -34,8 +43,8 @@ void syscall(void)
 	case SYS_fork:
 		break;
 
-	case SYS_fstat:
-		ret = sys_fstat(tf->a0, (void *) tf->a1);
+	case SYS_stat:
+		ret = sys_stat((void *) tf->a0, (void *) tf->a1);
 		break;
 
 	case SYS_getpid:
@@ -83,8 +92,8 @@ void syscall(void)
 		ret = sys_write(tf->a0, (void *) tf->a1, tf->a2);
 		break;
 
-	case SYS_fchdir:
-		ret = sys_fchdir(tf->a0);
+	case SYS_chdir:
+		ret = sys_chdir((void *) tf->a0);
 		break;
 
 	case SYS_mkdir:
@@ -143,16 +152,36 @@ void syscall(void)
 		ret = sys_umask(tf->a0);
 		break;
 
-	case SYS_fchmod:
-		ret = sys_fchmod(tf->a0, tf->a1);
+	case SYS_chmod:
+		ret = sys_chmod((void *) tf->a0, tf->a1);
 		break;
 
-	case SYS_fchown:
-		ret = sys_fchown(tf->a0, tf->a1, tf->a2);
+	case SYS_chown:
+		ret = sys_chown((void *) tf->a0, tf->a1, tf->a2);
 		break;
 
 	case SYS_lchown:
 		ret = sys_lchown((void *) tf->a0, tf->a1, tf->a2);
+		break;
+
+	case SYS_readdir:
+
+		break;
+
+	case SYS_mkfifo:
+
+		break;
+
+	case SYS_access:
+
+		break;
+
+	case SYS_utimes:
+
+		break;
+
+	case 1000:
+		debug_print((void *) tf->a0);
 		break;
 
 	default:

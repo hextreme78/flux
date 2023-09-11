@@ -1708,17 +1708,16 @@ static int ext2_direntry_delete(ext2_blkdev_t *dev, u32 dirinum, const char *nam
 	return 0;
 }
 
-/* get inode number via file path */
-int ext2_file_lookup(ext2_blkdev_t *dev, const char *path, u32 *inum, u32 relinum,
-		bool followlink)
+static int __ext2_file_lookup(ext2_blkdev_t *dev, const char *path,
+		u32 *inum, u32 relinum, bool followlink,
+		u16 uid, u16 gid,
+		bool r, bool w, bool x, bool s, size_t maxlinkdepth)
 {
 	int err;
 	size_t i = 0;
 	ext2_inode_t curinode;
-	u32 curinum;
+	u32 curinum, previnum;
 	char name[NAME_MAX];
-	u8 direntry_buf[sizeof(ext2_directory_entry_t) + NAME_MAX];
-	ext2_directory_entry_t *direntry = (void *) &direntry_buf;
 	size_t pathlen = strlen(path);
 
 	if (pathlen + 1 > PATH_MAX) {
@@ -1743,80 +1742,97 @@ int ext2_file_lookup(ext2_blkdev_t *dev, const char *path, u32 *inum, u32 relinu
 		return err;
 	}
 
+	if (uid && gid && s &&
+		!((curinode.i_uid == uid && curinode.i_mode & EXT2_S_IXUSR) ||
+		(curinode.i_gid == gid && curinode.i_mode & EXT2_S_IXGRP) ||
+		curinode.i_mode & EXT2_S_IXOTH)) {
+		return -EACCES;
+	}
+
 	while (path[i]) {
-		size_t offset = 0;
 		size_t j = 0;
 		while (path[i] != '/' && path[i]) {
 			name[j] = path[i];
 			i++;
 			j++;
 		}
+		name[j] = '\0';
 		while (path[i] == '/') i++;
 
-		if ((curinode.i_mode & EXT2_FILE_FORMAT_MASK) != EXT2_S_IFDIR) {
-			return -ENOTDIR;
+		previnum = curinum;
+		err = ext2_direntry_inum_by_name(dev, curinum, name, &curinum);
+		if (err) {
+			return err;
 		}
 
-		while (1) {
-			err = ext2_file_read(dev, curinum, direntry,
-					sizeof(*direntry), offset);
-			if (err < 0) {
+		err = ext2_inode_read(dev, curinum, &curinode);
+		if (err) {
+			return err;
+		}
+
+		if (uid && gid && path[i] && s &&
+			!((curinode.i_uid == uid && curinode.i_mode & EXT2_S_IXUSR) ||
+			(curinode.i_gid == gid && curinode.i_mode & EXT2_S_IXGRP) ||
+			curinode.i_mode & EXT2_S_IXOTH)) {
+			return -EACCES;
+		}
+		if (uid && gid && !path[i] && r &&
+			!((curinode.i_uid == uid && curinode.i_mode & EXT2_S_IRUSR) ||
+			(curinode.i_gid == gid && curinode.i_mode & EXT2_S_IRGRP) ||
+			curinode.i_mode & EXT2_S_IROTH)) {
+			return -EACCES;
+		}
+		if (uid && gid && !path[i] && w &&
+			!((curinode.i_uid == uid && curinode.i_mode & EXT2_S_IWUSR) ||
+			(curinode.i_gid == gid && curinode.i_mode & EXT2_S_IWGRP) ||
+			curinode.i_mode & EXT2_S_IWOTH)) {
+			return -EACCES;
+		}
+		if (uid && gid && !path[i] && x &&
+			!((curinode.i_uid == uid && curinode.i_mode & EXT2_S_IXUSR) ||
+			(curinode.i_gid == gid && curinode.i_mode & EXT2_S_IXGRP) ||
+			curinode.i_mode & EXT2_S_IXOTH)) {
+			return -EACCES;
+		}
+
+		if ((path[i] || followlink) &&
+			(curinode.i_mode & EXT2_FILE_FORMAT_MASK) ==
+				EXT2_S_IFLNK) {
+			char linkpath[curinode.i_size + 1];
+			err = ext2_symlink_read(dev, curinum,
+					linkpath);
+			if (err) {
 				return err;
 			}
 
-			if (direntry->name_len != j) {
-				offset += direntry->rec_len;
-				continue;
-			}
-
-			err = ext2_file_read(dev, curinum, direntry->name,
-					direntry->name_len,
-					offset + sizeof(*direntry));
-			if (err < 0) {
+			err = __ext2_file_lookup(dev, linkpath,
+					&curinum, previnum, true,
+					uid, gid, 
+					r, w, x, s, maxlinkdepth - 1);
+			if (err) {
 				return err;
 			}
 
-			if (!memcmp(name, direntry->name, direntry->name_len)) {
-				u32 previnum = curinum;
-				curinum = direntry->inode;
-				err = ext2_inode_read(dev, curinum, &curinode);
-				if (err) {
-					return err;
-				}
-
-				if ((path[i] || followlink) &&
-					(curinode.i_mode & EXT2_FILE_FORMAT_MASK) ==
-						EXT2_S_IFLNK) {
-					char linkpath[curinode.i_size + 1];
-					err = ext2_symlink_read(dev, curinum,
-							linkpath);
-					if (err) {
-						return err;
-					}
-
-					err = ext2_file_lookup(dev, linkpath,
-							&curinum, previnum, true);
-					if (err) {
-						return err;
-					}
-
-					err = ext2_inode_read(dev, curinum,
-							&curinode);
-					if (err) {
-						return err;
-					}
-				}
-
-				break;
+			err = ext2_inode_read(dev, curinum,
+					&curinode);
+			if (err) {
+				return err;
 			}
-
-			offset += direntry->rec_len;
 		}
 	}
 
 	*inum = curinum;
 
 	return 0;
+}
+
+int ext2_file_lookup(ext2_blkdev_t *dev, const char *path,
+		u32 *inum, u32 relinum, bool followlink,
+		u16 uid, u16 gid,
+		bool r, bool w, bool x, bool s)
+{
+	return __ext2_file_lookup(dev, path, inum, relinum, followlink,
+			uid, gid, r, w, x, s, SYMLINK_MAX_DEPTH);
 }
 
 static int ext2_regular_create(ext2_blkdev_t *dev, u32 parent_inum, const char *name,
@@ -2489,11 +2505,14 @@ int ext2_ftruncate(ext2_blkdev_t *dev, u32 inum, size_t sz)
 	return 0;
 }
 
-int ext2_readlink(ext2_blkdev_t *dev, const char *path, char *pathbuf, u32 relinum)
+int ext2_readlink(ext2_blkdev_t *dev, const char *path, char *pathbuf,
+		u16 uid, u16 gid, u32 relinum)
 {
 	int err;
 	u32 inum;
-	err = ext2_file_lookup(dev, path, &inum, relinum, false);
+
+	err = ext2_file_lookup(dev, path, &inum, relinum, false,
+			uid, gid, false, false, false, true);
 	if (err) {
 		return err;
 	}
@@ -2519,7 +2538,8 @@ int ext2_creat(ext2_blkdev_t *dev, const char *path, u16 mode,
 	strcpy(pathcopy1, path);
 	pathname = dirname(pathcopy0);
 	filename = basename(pathcopy1);
-	err = ext2_file_lookup(dev, pathname, &parent_inum, relinum, true);
+	err = ext2_file_lookup(dev, pathname, &parent_inum, relinum, true,
+			uid, gid, false, true, true, true);
 	if (err) {
 		return err;
 	}
@@ -2531,22 +2551,25 @@ int ext2_creat(ext2_blkdev_t *dev, const char *path, u16 mode,
 }
 
 int ext2_link(ext2_blkdev_t *dev, const char *oldpath, const char *newpath,
-		u32 relinum)
+		u16 uid, u16 gid, u32 relinum)
 {
 	int err;
 	u32 parent_inum, inum;
 	size_t newpathlen = strlen(newpath);
-	char newpathcopy0[newpathlen], newpathcopy1[newpathlen];
+	char newpathcopy0[newpathlen + 1], newpathcopy1[newpathlen + 1];
 	char *pathname, *filename;
+
 	strcpy(newpathcopy0, newpath);
 	strcpy(newpathcopy1, newpath);
 	pathname = dirname(newpathcopy0);
 	filename = basename(newpathcopy1);
-	err = ext2_file_lookup(dev, oldpath, &inum, relinum, false);
+	err = ext2_file_lookup(dev, oldpath, &inum, relinum, false,
+			uid, gid, false, false, false, true);
 	if (err) {
 		return err;
 	}
-	err = ext2_file_lookup(dev, pathname, &parent_inum, relinum, false);
+	err = ext2_file_lookup(dev, pathname, &parent_inum, relinum, false,
+			uid, gid, false, true, true, true);
 	if (err) {
 		return err;
 	}
@@ -2563,7 +2586,7 @@ int ext2_mkdir(ext2_blkdev_t *dev, const char *path, u16 mode,
 	int err;
 	u32 parent_inum;
 	size_t pathlen = strlen(path);
-	char pathcopy0[pathlen], pathcopy1[pathlen];
+	char pathcopy0[pathlen + 1], pathcopy1[pathlen + 1];
 	char *pathname, *filename;
 	if (mode & ~EXT2_ACCESS_RIGHTS_MASK) {
 		return -EINVAL;
@@ -2572,7 +2595,8 @@ int ext2_mkdir(ext2_blkdev_t *dev, const char *path, u16 mode,
 	strcpy(pathcopy1, path);
 	pathname = dirname(pathcopy0);
 	filename = basename(pathcopy1);
-	err = ext2_file_lookup(dev, pathname, &parent_inum, relinum, true);
+	err = ext2_file_lookup(dev, pathname, &parent_inum, relinum, true,
+			uid, gid, false, true, true, true);
 	if (err) {
 		return err;
 	}
@@ -2598,7 +2622,8 @@ int ext2_symlink(ext2_blkdev_t *dev, const char *path, u16 mode,
 	strcpy(pathcopy1, path);
 	pathname = dirname(pathcopy0);
 	filename = basename(pathcopy1);
-	err = ext2_file_lookup(dev, pathname, &parent_inum, relinum, true);
+	err = ext2_file_lookup(dev, pathname, &parent_inum, relinum, true,
+			uid, gid, false, true, true, true);
 	if (err) {
 		return err;
 	}
@@ -2609,18 +2634,19 @@ int ext2_symlink(ext2_blkdev_t *dev, const char *path, u16 mode,
 	return 0;
 }
 
-int ext2_unlink(ext2_blkdev_t *dev, const char *path, u32 relinum)
+int ext2_unlink(ext2_blkdev_t *dev, const char *path, u16 uid, u16 gid, u32 relinum)
 {
 	int err;
 	u32 parent_inum;
 	size_t pathlen = strlen(path);
-	char pathcopy0[pathlen], pathcopy1[pathlen];
+	char pathcopy0[pathlen + 1], pathcopy1[pathlen + 1];
 	char *pathname, *filename;
 	strcpy(pathcopy0, path);
 	strcpy(pathcopy1, path);
 	pathname = dirname(pathcopy0);
 	filename = basename(pathcopy1);
-	err = ext2_file_lookup(dev, pathname, &parent_inum, relinum, true);
+	err = ext2_file_lookup(dev, pathname, &parent_inum, relinum, true,
+			uid, gid, false, true, true, true);
 	if (err) {
 		return err;
 	}
@@ -2631,18 +2657,19 @@ int ext2_unlink(ext2_blkdev_t *dev, const char *path, u32 relinum)
 	return 0;
 }
 
-int ext2_rmdir(ext2_blkdev_t *dev, const char *path, u32 relinum)
+int ext2_rmdir(ext2_blkdev_t *dev, const char *path, u16 uid, u16 gid, u32 relinum)
 {
 	int err;
 	u32 parent_inum;
 	size_t pathlen = strlen(path);
-	char pathcopy0[pathlen], pathcopy1[pathlen];
+	char pathcopy0[pathlen + 1], pathcopy1[pathlen + 1];
 	char *pathname, *filename;
 	strcpy(pathcopy0, path);
 	strcpy(pathcopy1, path);
 	pathname = dirname(pathcopy0);
 	filename = basename(pathcopy1);
-	err = ext2_file_lookup(dev, pathname, &parent_inum, relinum, true);
+	err = ext2_file_lookup(dev, pathname, &parent_inum, relinum, true,
+			uid, gid, false, true, true, true);
 	if (err) {
 		return err;
 	}
@@ -2654,7 +2681,7 @@ int ext2_rmdir(ext2_blkdev_t *dev, const char *path, u32 relinum)
 }
 
 int ext2_rename(ext2_blkdev_t *dev, const char *oldpath, const char *newpath,
-		u32 relinum)
+		u16 uid, u16 gid, u32 relinum)
 {
 	int err;
 	u32 srcinum, dstinum, parent_srcinum, parent_dstinum;
@@ -2676,7 +2703,8 @@ int ext2_rename(ext2_blkdev_t *dev, const char *oldpath, const char *newpath,
 	dstpathname = dirname(newpath0);
 	dstfilename = basename(newpath1);
 
-	err = ext2_file_lookup(dev, oldpath, &srcinum, relinum, false);
+	err = ext2_file_lookup(dev, oldpath, &srcinum, relinum, false,
+			uid, gid, false, false, false, true);
 	if (err) {
 		return err;
 	}
@@ -2690,14 +2718,17 @@ int ext2_rename(ext2_blkdev_t *dev, const char *oldpath, const char *newpath,
 		return -ENOTDIR;
 	}
 
-	err = ext2_file_lookup(dev, srcpathname, &parent_srcinum, relinum, true);
+	err = ext2_file_lookup(dev, srcpathname, &parent_srcinum, relinum, true,
+			uid, gid, false, true, true, true);
 	if (err) {
 		return err;
 	}
 
-	err = ext2_file_lookup(dev, newpath, &dstinum, relinum, false);
+	err = ext2_file_lookup(dev, newpath, &dstinum, relinum, false,
+			uid, gid, false, false, false, true);
 	if (err) {
-		err = ext2_file_lookup(dev, dstpathname, &parent_dstinum, relinum, true);
+		err = ext2_file_lookup(dev, dstpathname, &parent_dstinum, relinum, true,
+				uid, gid, false, true, true, true);
 		if (err) {
 			return err;
 		}
@@ -2767,6 +2798,14 @@ int ext2_rename(ext2_blkdev_t *dev, const char *oldpath, const char *newpath,
 
 	if ((dstinode.i_mode & EXT2_FILE_FORMAT_MASK) == EXT2_S_IFDIR) {
 		u32 tmp;
+
+		/* for permission check only */
+		err = ext2_file_lookup(dev, newpath, &tmp, relinum, false,
+			uid, gid, false, true, true, true);
+		if (err) {
+			return err;
+		}
+
 		err = ext2_direntry_inum_by_name(dev, dstinum, srcfilename, &tmp);
 		if (!err) {
 			int err = ext2_file_delete(dev, dstinum, srcfilename);
@@ -2823,8 +2862,9 @@ int ext2_rename(ext2_blkdev_t *dev, const char *oldpath, const char *newpath,
 
 		return 0;
 	}
-	
-	err = ext2_file_lookup(dev, dstpathname, &parent_dstinum, relinum, true);
+
+	err = ext2_file_lookup(dev, dstpathname, &parent_dstinum, relinum, true,
+			uid, gid, false, true, true, true);
 	if (err) {
 		return err;
 	}
@@ -2882,11 +2922,12 @@ int ext2_rename(ext2_blkdev_t *dev, const char *oldpath, const char *newpath,
 }
 
 int ext2_truncate(ext2_blkdev_t *dev, const char *path, size_t sz,
-		u32 relinum)
+		u16 uid, u16 gid, u32 relinum)
 {
 	int err;
 	u32 inum;
-	err = ext2_file_lookup(dev, path, &inum, relinum, true);
+	err = ext2_file_lookup(dev, path, &inum, relinum, true,
+			uid, gid, false, true, false, true);
 	if (err) {
 		return err;
 	}
@@ -2925,16 +2966,15 @@ int ext2_fstat(ext2_blkdev_t *dev, u32 inum, struct stat *st)
 }
 
 int ext2_stat(ext2_blkdev_t *dev, const char *path, struct stat *st,
-		u32 relinum)
+		u16 uid, u16 gid, u32 relinum)
 {
 	int err;
 	u32 inum;
-
-	err = ext2_file_lookup(dev, path, &inum, relinum, true);
+	err = ext2_file_lookup(dev, path, &inum, relinum, true,
+			uid, gid, false, false, false, true);
 	if (err) {
 		return err;
 	}
-
 	err = ext2_fstat(dev, inum, st);
 	if (err) {
 		return err;
@@ -3006,6 +3046,25 @@ int ext2_fchdir(ext2_blkdev_t *dev, u32 inum, u32 *cwd)
 	return 0;
 }
 
+int ext2_chdir(ext2_blkdev_t *dev, const char *path, u16 uid, u16 gid, u32 *cwd)
+{
+	int err;
+	u32 inum;
+	
+	err = ext2_file_lookup(dev, path, &inum, *cwd, true,
+			uid, gid, false, false, true, true);
+	if (err) {
+		return err;
+	}
+	
+	err = ext2_fchdir(dev, inum, cwd);
+	if (err) {
+		return err;
+	}
+	
+	return 0;
+}
+
 int ext2_getcwd(ext2_blkdev_t *dev, u32 inum, char *buf, size_t size)
 {
 	int err;
@@ -3016,7 +3075,7 @@ int ext2_getcwd(ext2_blkdev_t *dev, u32 inum, char *buf, size_t size)
 	if (err) {
 		return err;
 	}
-	
+
 	pathlen = strlen(path) + 1;
 	if (pathlen > size) {
 		return -ERANGE;
@@ -3027,12 +3086,14 @@ int ext2_getcwd(ext2_blkdev_t *dev, u32 inum, char *buf, size_t size)
 	return 0;
 }
 
-int ext2_lstat(ext2_blkdev_t *dev, const char *path, struct stat *st, u32 relinum)
+int ext2_lstat(ext2_blkdev_t *dev, const char *path, struct stat *st,
+		u16 uid, u16 gid, u32 relinum)
 {
 	int err;
 	u32 inum;
 
-	err = ext2_file_lookup(dev, path, &inum, relinum, false);
+	err = ext2_file_lookup(dev, path, &inum, relinum, false,
+			uid, gid, false, false, false, true);
 	if (err) {
 		return err;
 	}
@@ -3055,9 +3116,30 @@ int ext2_fchmod(ext2_blkdev_t *dev, u32 inum, u16 mode)
 		return err;
 	}
 
-	inode.i_mode = mode | (inode.i_mode & EXT2_FILE_FORMAT_MASK);
+	inode.i_mode = (mode & EXT2_ACCESS_RIGHTS_MASK) |
+		(inode.i_mode & EXT2_FILE_FORMAT_MASK);
 
 	err = ext2_inode_write(dev, inum, &inode);
+	if (err) {
+		return err;
+	}
+
+	return 0;
+}
+
+int ext2_chmod(ext2_blkdev_t *dev, const char *path, u16 mode,
+		u16 uid, u16 gid, u32 relinum)
+{
+	int err;
+	u32 inum;
+
+	err = ext2_file_lookup(dev, path, &inum, relinum, true,
+			uid, gid, false, false, false, true);
+	if (err) {
+		return err;
+	}
+
+	err = ext2_fchmod(dev, inum, mode);
 	if (err) {
 		return err;
 	}
@@ -3086,17 +3168,19 @@ int ext2_fchown(ext2_blkdev_t *dev, u32 inum, u16 uid, u16 gid)
 	return 0;
 }
 
-int ext2_lchown(ext2_blkdev_t *dev, const char *path, u16 uid, u16 gid, u32 relinum)
+int ext2_chown(ext2_blkdev_t *dev, const char *path, u16 uid, u16 gid,
+		u32 relinum, u16 uidval, u16 gidval)
 {
 	int err;
 	u32 inum;
 
-	err = ext2_file_lookup(dev, path, &inum, relinum, false);
+	err = ext2_file_lookup(dev, path, &inum, relinum, true,
+			uid, gid, false, false, false, true);
 	if (err) {
 		return err;
 	}
 
-	err = ext2_fchown(dev, inum, uid, gid);
+	err = ext2_fchown(dev, inum, uidval, gidval);
 	if (err) {
 		return err;
 	}
@@ -3104,14 +3188,34 @@ int ext2_lchown(ext2_blkdev_t *dev, const char *path, u16 uid, u16 gid, u32 reli
 	return 0;
 }
 
-int ext2_access(ext2_blkdev_t *dev, u32 inum, u16 uid, u16 gid)
+int ext2_lchown(ext2_blkdev_t *dev, const char *path, u16 uid, u16 gid, u32 relinum,
+		u16 uidval, u16 gidval)
+{
+	int err;
+	u32 inum;
+
+	err = ext2_file_lookup(dev, path, &inum, relinum, false,
+			uid, gid, false, false, false, true);
+	if (err) {
+		return err;
+	}
+
+	err = ext2_fchown(dev, inum, uidval, gidval);
+	if (err) {
+		return err;
+	}
+
+	return 0;
+}
+
+int ext2_access(ext2_blkdev_t *dev, const char *path, int mode, u16 uid, u16 gid)
 {
 	/* not implemented */
 
 	return 0;
 }
 
-int ext2_utime(ext2_blkdev_t *dev, u32 inum)
+int ext2_utimes(ext2_blkdev_t *dev, u32 inum)
 {
 	/* not implemented */
 

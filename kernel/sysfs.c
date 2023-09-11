@@ -27,7 +27,8 @@ int sys_link(const char *path1, const char *path2)
 	}
 
 	mutex_lock(&rootblkdev->lock);
-	err = ext2_link(rootblkdev, pathbuf1, pathbuf2, curproc()->cwd);
+	err = ext2_link(rootblkdev, pathbuf1, pathbuf2,
+			curproc()->uid, curproc()->gid, curproc()->cwd);
 	if (err) {
 		mutex_unlock(&rootblkdev->lock);
 		return err;
@@ -78,7 +79,8 @@ int sys_unlink(const char *path)
 	}
 
 	mutex_lock(&rootblkdev->lock);
-	err = ext2_unlink(rootblkdev, pathbuf, curproc()->cwd);
+	err = ext2_unlink(rootblkdev, pathbuf, curproc()->uid,
+			curproc()->gid, curproc()->cwd);
 	if (err) {
 		mutex_unlock(&rootblkdev->lock);
 		return err;
@@ -103,7 +105,8 @@ int sys_rmdir(const char *path)
 	}
 
 	mutex_lock(&rootblkdev->lock);
-	err = ext2_rmdir(rootblkdev, pathbuf, curproc()->cwd);
+	err = ext2_rmdir(rootblkdev, pathbuf, curproc()->uid, curproc()->gid,
+			curproc()->cwd);
 	if (err) {
 		mutex_unlock(&rootblkdev->lock);
 		return err;
@@ -137,7 +140,8 @@ int sys_rename(const char *path1, const char *path2)
 	}
 
 	mutex_lock(&rootblkdev->lock);
-	err = ext2_rename(rootblkdev, pathbuf1, pathbuf2, curproc()->cwd);
+	err = ext2_rename(rootblkdev, pathbuf1, pathbuf2,
+			curproc()->uid, curproc()->gid, curproc()->cwd);
 	if (err) {
 		mutex_unlock(&rootblkdev->lock);
 		return err;
@@ -165,7 +169,8 @@ ssize_t sys_readlink(const char *restrict path, char *restrict buf,
 	}
 
 	mutex_lock(&rootblkdev->lock);
-	err = ext2_readlink(rootblkdev, pathbuf, linkbuf, curproc()->cwd);
+	err = ext2_readlink(rootblkdev, pathbuf, linkbuf,
+			curproc()->uid, curproc()->gid, curproc()->cwd);
 	if (err) {
 		mutex_unlock(&rootblkdev->lock);
 		return err;
@@ -186,6 +191,10 @@ int sys_open(const char *path, int flags, mode_t mode)
 	size_t pathlen;
 	u32 inum;
 	int fd = -1;
+	bool r, w, x;
+	r = (flags & O_ACCMODE) != O_WRONLY;
+	w = (flags & O_ACCMODE) != O_RDONLY;
+	x = flags & O_EXEC;
 
 	pathlen = strnlen_user(path, PATH_MAX);
 	if (pathlen > PATH_MAX) {
@@ -223,6 +232,7 @@ int sys_open(const char *path, int flags, mode_t mode)
 	}
 
 	mutex_lock(&rootblkdev->lock);
+
 	if (flags & O_CREAT) {
 		err = ext2_creat(rootblkdev, pathbuf, mode & ~curproc()->umask,
 				curproc()->uid, curproc()->gid, curproc()->cwd);
@@ -234,7 +244,8 @@ int sys_open(const char *path, int flags, mode_t mode)
 			return err;
 		}
 	}
-	err = ext2_file_lookup(rootblkdev, pathbuf, &inum, curproc()->cwd, true);
+	err = ext2_file_lookup(rootblkdev, pathbuf, &inum, curproc()->cwd, true,
+			curproc()->uid, curproc()->gid, r, w, x, true);
 	if (err) {
 		mutex_unlock(&rootblkdev->lock);
 		kfree(curproc()->filetable[fd].refcnt);
@@ -242,8 +253,10 @@ int sys_open(const char *path, int flags, mode_t mode)
 		kfree(curproc()->filetable[fd].offset);
 		return err;
 	}
+
 	if ((flags & O_TRUNC) && ((flags & O_ACCMODE) != O_RDONLY)) {
-		err = ext2_truncate(rootblkdev, pathbuf, 0, curproc()->cwd);
+		err = ext2_truncate(rootblkdev, pathbuf, 0,
+				curproc()->uid, curproc()->gid, curproc()->cwd);
 		if (err) {
 			mutex_unlock(&rootblkdev->lock);
 			kfree(curproc()->filetable[fd].refcnt);
@@ -255,7 +268,8 @@ int sys_open(const char *path, int flags, mode_t mode)
 
 	if (flags & O_APPEND) {
 		struct stat st;
-		err = ext2_stat(rootblkdev, pathbuf, &st, curproc()->cwd);
+		err = ext2_stat(rootblkdev, pathbuf, &st,
+				curproc()->uid, curproc()->gid, curproc()->cwd);
 		if (err) {
 			mutex_unlock(&rootblkdev->lock);
 			kfree(curproc()->filetable[fd].refcnt);
@@ -398,17 +412,24 @@ int sys_close(int fd)
 	return 0;
 }
 
-int sys_fstat(int fd, struct stat *st)
+int sys_stat(const char *path, struct stat *st)
 {
 	int err;
 	struct stat stbuf;
+	size_t pathlen;
 
-	if (fd < 0 || fd >= FD_MAX || !curproc()->filetable[fd].inum) {
-		return -EBADFD;
+	pathlen = strnlen_user(path, PATH_MAX);
+	if (pathlen > PATH_MAX) {
+		return -ENAMETOOLONG;
+	}
+	char pathbuf[pathlen];
+	if (copy_from_user(pathbuf, path, pathlen)) {
+		return -EFAULT;
 	}
 
 	mutex_lock(&rootblkdev->lock);
-	err = ext2_fstat(rootblkdev, curproc()->filetable[fd].inum, &stbuf);
+	err = ext2_stat(rootblkdev, pathbuf, &stbuf,
+			curproc()->uid, curproc()->gid, curproc()->cwd);
 	if (err) {
 		mutex_unlock(&rootblkdev->lock);
 		return err;
@@ -422,16 +443,23 @@ int sys_fstat(int fd, struct stat *st)
 	return 0;
 }
 
-int sys_fchdir(int fd)
+int sys_chdir(const char *path)
 {
 	int err;
+	size_t pathlen;
 
-	if (fd < 0 || fd >= FD_MAX || !curproc()->filetable[fd].inum) {
-		return -EBADFD;
+	pathlen = strnlen_user(path, PATH_MAX);
+	if (pathlen > PATH_MAX) {
+		return -ENAMETOOLONG;
+	}
+	char pathbuf[pathlen];
+	if (copy_from_user(pathbuf, path, pathlen)) {
+		return -EFAULT;
 	}
 
 	mutex_lock(&rootblkdev->lock);
-	err = ext2_fchdir(rootblkdev, curproc()->filetable[fd].inum, &curproc()->cwd);
+	err = ext2_chdir(rootblkdev, pathbuf, curproc()->uid, curproc()->gid,
+			&curproc()->cwd);
 	if (err) {
 		mutex_unlock(&rootblkdev->lock);
 		return err;
@@ -479,12 +507,11 @@ int sys_symlink(const char *path1, const char *path2)
 int sys_ftruncate(int fd, off_t length)
 {
 	int err;
-
 	if (fd < 0 || fd >= FD_MAX || !curproc()->filetable[fd].inum) {
 		return -EBADFD;
 	}
 	if ((*curproc()->filetable[fd].status_flags & O_ACCMODE) == O_RDONLY) {
-		return -EBADFD;
+		return -EACCES;
 	}
 
 	mutex_lock(&rootblkdev->lock);
@@ -571,7 +598,8 @@ int sys_fcntl(int fd, int cmd, int arg)
 		curproc()->filetable[fd].fd_flags = arg;
 		break;
 	case F_SETFL:
-		*curproc()->filetable[fd].status_flags = arg;
+		*curproc()->filetable[fd].status_flags &= (O_ACCMODE | O_EXEC);
+		*curproc()->filetable[fd].status_flags |= arg & ~(O_ACCMODE | O_EXEC);
 		break;
 	case F_GETFL:
 		return *curproc()->filetable[fd].status_flags;
@@ -683,7 +711,8 @@ int sys_lstat(const char *path, struct stat *st)
 	}
 
 	mutex_lock(&rootblkdev->lock);
-	err = ext2_lstat(rootblkdev, pathbuf, &stbuf, curproc()->cwd);
+	err = ext2_lstat(rootblkdev, pathbuf, &stbuf,
+			curproc()->uid, curproc()->gid, curproc()->cwd);
 	if (err) {
 		mutex_unlock(&rootblkdev->lock);
 		return err;
@@ -704,15 +733,23 @@ mode_t sys_umask(mode_t mask)
 	return oldmask;
 }
 
-int sys_fchmod(int fd, mode_t mode)
+int sys_chmod(const char *path, mode_t mode)
 {
 	int err;
-	if (fd < 0 || fd >= FD_MAX || !curproc()->filetable[fd].inum) {
-		return -EBADFD;
+	size_t pathlen;
+
+	pathlen = strnlen_user(path, PATH_MAX);
+	if (pathlen > PATH_MAX) {
+		return -ENAMETOOLONG;
+	}
+	char pathbuf[pathlen];
+	if (copy_from_user(pathbuf, path, pathlen)) {
+		return -EFAULT;
 	}
 
 	mutex_lock(&rootblkdev->lock);
-	err = ext2_fchmod(rootblkdev, curproc()->filetable[fd].inum, mode);
+	err = ext2_chmod(rootblkdev, pathbuf, mode,
+			curproc()->uid, curproc()->gid, curproc()->cwd);
 	if (err) {
 		mutex_unlock(&rootblkdev->lock);
 		return err;
@@ -722,15 +759,24 @@ int sys_fchmod(int fd, mode_t mode)
 	return 0;
 }
 
-int sys_fchown(int fd, uid_t uid, gid_t gid)
+int sys_chown(const char *path, uid_t uid, gid_t gid)
 {
 	int err;
-	if (fd < 0 || fd >= FD_MAX || !curproc()->filetable[fd].inum) {
-		return -EBADFD;
+	size_t pathlen;
+
+	pathlen = strnlen_user(path, PATH_MAX);
+	if (pathlen > PATH_MAX) {
+		return -ENAMETOOLONG;
+	}
+	char pathbuf[pathlen];
+	if (copy_from_user(pathbuf, path, pathlen)) {
+		return -EFAULT;
 	}
 
 	mutex_lock(&rootblkdev->lock);
-	err = ext2_fchown(rootblkdev, curproc()->filetable[fd].inum, uid, gid);
+	err = ext2_chown(rootblkdev, pathbuf,
+			curproc()->uid, curproc()->gid, curproc()->cwd,
+			uid, gid);
 	if (err) {
 		mutex_unlock(&rootblkdev->lock);
 		return err;
@@ -755,7 +801,9 @@ int sys_lchown(const char *path, uid_t uid, gid_t gid)
 	}
 
 	mutex_lock(&rootblkdev->lock);
-	err = ext2_lchown(rootblkdev, pathbuf, uid, gid, curproc()->cwd);
+	err = ext2_lchown(rootblkdev, pathbuf,
+			curproc()->uid, curproc()->gid, curproc()->cwd,
+			uid, gid);
 	if (err) {
 		mutex_unlock(&rootblkdev->lock);
 		return err;

@@ -1,20 +1,16 @@
-#include <unistd.h>
-#include <fcntl.h>
+#include <syscall.h>
 #include <sys/types.h>
-
-int fchmod(int fd, mode_t mode);
+#include <errno.h>
+#undef errno
+extern int errno;
 
 int chmod(const char *path, mode_t mode)
 {
-	int fd = open(path, O_RDONLY);
-	if (fd < 0) {
+	long result = syscall(SYS_chmod, path, mode);
+	if (result < 0) {
+		errno = -result;
 		return -1;
 	}
-	if (fchmod(fd, mode) < 0) {
-		close(fd);
-		return -1;
-	}
-	close(fd);
-	return 0;
+	return result;
 }
 

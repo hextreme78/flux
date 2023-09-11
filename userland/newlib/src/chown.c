@@ -1,20 +1,16 @@
-#include <unistd.h>
-#include <fcntl.h>
+#include <syscall.h>
 #include <sys/types.h>
-
-int fchown(int fd, uid_t uid, gid_t gid);
+#include <errno.h>
+#undef errno
+extern int errno;
 
 int chown(const char *path, uid_t uid, gid_t gid)
 {
-	int fd = open(path, O_RDONLY);
-	if (fd < 0) {
+	long result = syscall(SYS_chown, path, uid, gid);
+	if (result < 0) {
+		errno = -result;
 		return -1;
 	}
-	if (fchown(fd, uid, gid) < 0) {
-		close(fd);
-		return -1;
-	}
-	close(fd);
-	return 0;
+	return result;
 }
 

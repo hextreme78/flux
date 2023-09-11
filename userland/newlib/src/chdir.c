@@ -1,19 +1,15 @@
-#include <unistd.h>
-#include <fcntl.h>
-
-int fchdir(int fd);
+#include <syscall.h>
+#include <errno.h>
+#undef errno
+extern int errno;
 
 int chdir(const char *path)
 {
-	int fd = open(path, O_RDONLY);
-	if (fd < 0) {
+	long result = syscall(SYS_chdir, path);
+	if (result < 0) {
+		errno = -result;
 		return -1;
 	}
-	if (fchdir(fd) < 0) {
-		close(fd);
-		return -1;
-	}
-	close(fd);
-	return 0;
+	return result;
 }
 
