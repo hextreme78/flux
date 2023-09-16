@@ -307,7 +307,7 @@ ssize_t ext2_regular_read(ext2_blkdev_t *dev, u32 inum, void *buf, u64 len, u64 
 ssize_t ext2_regular_write(ext2_blkdev_t *dev, u32 inum, void *buf, u64 len, u64 offset);
 int ext2_fchdir(ext2_blkdev_t *dev, u32 inum, u32 *cwd);
 int ext2_chdir(ext2_blkdev_t *dev, const char *path, u16 uid, u16 gid, u32 *cwd);
-int ext2_getcwd(ext2_blkdev_t *dev, u32 inum, char *buf, size_t size);
+int ext2_getcwd(ext2_blkdev_t *dev, u32 inum, char *buf, size_t size, u16 uid, u16 gid);
 int ext2_lstat(ext2_blkdev_t *dev, const char *path, struct stat *st,
 		u16 uid, u16 gid, u32 relinum);
 int ext2_fchmod(ext2_blkdev_t *dev, u32 inum, u16 mode);

@@ -2382,7 +2382,8 @@ static int ext2_file_delete(ext2_blkdev_t *dev, u32 dirinum, const char *name)
 	return 0;
 }
 
-static int ext2_directory_absolute_path(ext2_blkdev_t *dev, u32 inum, char *buf)
+static int ext2_directory_absolute_path(ext2_blkdev_t *dev, u32 inum, char *buf,
+		u16 uid, u16 gid)
 {
 	int err;
 	size_t i, j;
@@ -2402,10 +2403,40 @@ static int ext2_directory_absolute_path(ext2_blkdev_t *dev, u32 inum, char *buf)
 		return -ENOTDIR;
 	}
 
+	if (uid && gid &&
+		!((inode.i_uid == uid && inode.i_mode & EXT2_S_IRUSR) ||
+		(inode.i_gid == gid && inode.i_mode & EXT2_S_IRGRP) ||
+		inode.i_mode & EXT2_S_IROTH)) {
+		return -EACCES;
+	}
+	if (uid && gid &&
+		!((inode.i_uid == uid && inode.i_mode & EXT2_S_IXUSR) ||
+		(inode.i_gid == gid && inode.i_mode & EXT2_S_IXGRP) ||
+		inode.i_mode & EXT2_S_IXOTH)) {
+		return -EACCES;
+	}
+
 	while (curinum != EXT2_ROOT_INODE) {
 		err = ext2_direntry_inum_by_name(dev, curinum, "..", &parent_inum);
 		if (err) {
 			return err;
+		}
+
+		err = ext2_inode_read(dev, parent_inum, &inode);
+		if (err) {
+			return err;
+		}
+		if (uid && gid &&
+			!((inode.i_uid == uid && inode.i_mode & EXT2_S_IRUSR) ||
+			(inode.i_gid == gid && inode.i_mode & EXT2_S_IRGRP) ||
+			inode.i_mode & EXT2_S_IROTH)) {
+			return -EACCES;
+		}
+		if (uid && gid &&
+			!((inode.i_uid == uid && inode.i_mode & EXT2_S_IXUSR) ||
+			(inode.i_gid == gid && inode.i_mode & EXT2_S_IXGRP) ||
+			inode.i_mode & EXT2_S_IXOTH)) {
+			return -EACCES;
 		}
 
 		err = ext2_direntry_name_by_inum(dev, parent_inum, namebuf, curinum);
@@ -3065,13 +3096,14 @@ int ext2_chdir(ext2_blkdev_t *dev, const char *path, u16 uid, u16 gid, u32 *cwd)
 	return 0;
 }
 
-int ext2_getcwd(ext2_blkdev_t *dev, u32 inum, char *buf, size_t size)
+int ext2_getcwd(ext2_blkdev_t *dev, u32 inum, char *buf, size_t size,
+		u16 uid, u16 gid)
 {
 	int err;
 	char path[PATH_MAX];
 	size_t pathlen;
 
-	err = ext2_directory_absolute_path(dev, inum, path);
+	err = ext2_directory_absolute_path(dev, inum, path, uid, gid);
 	if (err) {
 		return err;
 	}

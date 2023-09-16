@@ -531,7 +531,8 @@ int sys_getcwd(char *buf, size_t size)
 	char pathbuf[PATH_MAX];
 
 	mutex_lock(&rootblkdev->lock);
-	err = ext2_getcwd(rootblkdev, curproc()->cwd, pathbuf, size);
+	err = ext2_getcwd(rootblkdev, curproc()->cwd, pathbuf, size, curproc()->uid,
+			curproc()->gid);
 	if (err) {
 		mutex_unlock(&rootblkdev->lock);
 		return err;
