@@ -197,7 +197,7 @@ void syscall(void)
 		break;
 
 	case SYS_access:
-
+		ret = sys_access((void *) tf->a0, tf->a1);
 		break;
 
 	case SYS_utimes:

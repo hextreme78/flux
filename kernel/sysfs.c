@@ -952,3 +952,28 @@ int sys_creat(const char *path, mode_t mode)
 	return 0;
 }
 
+int sys_access(const char *path, int mode)
+{
+	int err;
+	size_t pathlen;
+	pathlen = strnlen_user(path, PATH_MAX);
+	if (pathlen > PATH_MAX) {
+		return -ENAMETOOLONG;
+	}
+	char pathbuf[pathlen];
+	if (copy_from_user(pathbuf, path, pathlen)) {
+		return -EFAULT;
+	}
+
+	mutex_lock(&rootblkdev->lock);
+	err = ext2_access(rootblkdev, pathbuf, mode,
+				curproc()->uid, curproc()->gid, curproc()->cwd);
+	if (err) {
+		mutex_unlock(&rootblkdev->lock);
+		return err;
+	}
+	mutex_unlock(&rootblkdev->lock);
+
+	return 0;
+}
+

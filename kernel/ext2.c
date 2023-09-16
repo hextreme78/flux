@@ -3240,14 +3240,24 @@ int ext2_lchown(ext2_blkdev_t *dev, const char *path, u16 uid, u16 gid, u32 reli
 	return 0;
 }
 
-int ext2_access(ext2_blkdev_t *dev, const char *path, int mode, u16 uid, u16 gid)
+int ext2_access(ext2_blkdev_t *dev, const char *path, int mode, u16 uid, u16 gid,
+		u32 relinum)
 {
-	/* not implemented */
-
+	int err;
+	u32 inum;
+	bool r, w, x;
+	r = mode & R_OK;
+	w = mode & W_OK;
+	x = mode & X_OK;
+	err = ext2_file_lookup(dev, path, &inum, relinum, true,
+			uid, gid, r, w, x, true);
+	if (err) {
+		return err;
+	}
 	return 0;
 }
 
-int ext2_utimes(ext2_blkdev_t *dev, u32 inum)
+int ext2_utimes(ext2_blkdev_t *dev)
 {
 	/* not implemented */
 
