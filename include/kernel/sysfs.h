@@ -29,6 +29,12 @@ mode_t sys_umask(mode_t mask);
 int sys_chmod(const char *path, mode_t mode);
 int sys_chown(const char *path, uid_t uid, gid_t gid);
 int sys_lchown(const char *path, uid_t uid, gid_t gid);
+int sys_fstat(int fd, struct stat *st);
+int sys_fchdir(int fd);
+int sys_fchmod(int fd, mode_t mode);
+int sys_fchown(int fd, uid_t uid, gid_t gid);
+int sys_truncate(const char *path, off_t length);
+int sys_creat(const char *path, mode_t mode);
 
 #endif
 

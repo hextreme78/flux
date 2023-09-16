@@ -2,9 +2,9 @@
 #include <sys/types.h>
 #include <errno.h>
 
-int truncate(const char *path, off_t length)
+int fchmod(int fd, mode_t mode)
 {
-	long result = syscall(SYS_truncate, path, length);
+	long result = syscall(SYS_fchmod, fd, mode);
 	if (result < 0) {
 		errno = -result;
 		return -1;

@@ -164,6 +164,30 @@ void syscall(void)
 		ret = sys_lchown((void *) tf->a0, tf->a1, tf->a2);
 		break;
 
+	case SYS_fstat:
+		ret = sys_fstat(tf->a0, (void *) tf->a1);
+		break;
+
+	case SYS_fchdir:
+		ret = sys_fchdir(tf->a0);
+		break;
+
+	case SYS_fchmod:
+		ret = sys_fchmod(tf->a0, tf->a1);
+		break;
+
+	case SYS_fchown:
+		ret = sys_fchown(tf->a0, tf->a1, tf->a2);
+		break;
+
+	case SYS_truncate:
+		ret = sys_truncate((void *) tf->a0, tf->a1);
+		break;
+
+	case SYS_creat:
+		ret = sys_creat((void *) tf->a0, tf->a1);
+		break;
+
 	case SYS_readdir:
 
 		break;

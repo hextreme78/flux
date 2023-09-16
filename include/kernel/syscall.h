@@ -18,7 +18,6 @@
 #define SYS_unlink    14
 #define SYS_wait      15
 #define SYS_write     16
-
 #define SYS_chdir     17
 #define SYS_mkdir     18
 #define SYS_readlink  19
@@ -45,6 +44,12 @@
 #define SYS_fsync     40
 #define SYS_fdatasync 41
 #define SYS_pipe2     42
+#define SYS_fstat     43
+#define SYS_fchmod    44
+#define SYS_fchown    45
+#define SYS_fchdir    46
+#define SYS_truncate  47
+#define SYS_creat     48
 
 void syscall(void);
 
