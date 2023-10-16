@@ -1116,6 +1116,7 @@ int sys_pipe2(int *pipefd, int flags)
 
 	*curproc()->filetable[fds[0]].status_flags = flags | O_RDWR;
 	*curproc()->filetable[fds[0]].roffset = 0;
+	*curproc()->filetable[fds[0]].woffset = 0;
 	*curproc()->filetable[fds[0]].refcnt = 2;
 
 	curproc()->filetable[fds[1]] = curproc()->filetable[fds[0]];
