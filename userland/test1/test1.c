@@ -18,6 +18,24 @@ void sys_printf(const char *fmt, ...)
 
 int main(void)
 {
+	char str1[] = "Hello, world!\n";
+	char str0[] = ".............\n";
+	int fds[2];
+
+	if (pipe2(fds, 0) < 0) {
+		sys_printf("error: pipe2() errno=%d\n", errno);
+		return 0;
+	}
+
+	write(fds[1], str0, sizeof(str0));
+	read(fds[0], str1, sizeof(str0));
+
+	sys_printf("%s", str1);
+
+	close(fds[0]);
+	close(fds[1]);
+
+	/*
 	if (chmod("/", 0777) < 0) {
 		sys_printf("error: 1. chmod() errno=%d\n", errno);
 		return 0;
@@ -55,9 +73,11 @@ int main(void)
 	}
 
 	sys_printf("%s\n", cwd);
+	*/
+
 
 	sys_printf("success\n");
-
+	
 	return 0;
 }
 

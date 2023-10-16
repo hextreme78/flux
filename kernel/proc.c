@@ -84,7 +84,7 @@ static proc_t *proc_slot_alloc(void)
 	proc->wchan = NULL;
 
 	for (size_t i = 0; i < FD_MAX; i++) {
-		proc->filetable[i].inum = 0;
+		proc->filetable[i].alloc = false;
 	}
 
 	proc->uid = 0;

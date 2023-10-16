@@ -36,6 +36,7 @@ int sys_fchown(int fd, uid_t uid, gid_t gid);
 int sys_truncate(const char *path, off_t length);
 int sys_creat(const char *path, mode_t mode);
 int sys_access(const char *path, int mode);
+int sys_pipe2(int *pipefd, int flags);
 
 #endif
 

@@ -204,6 +204,10 @@ void syscall(void)
 
 		break;
 
+	case SYS_pipe2:
+		ret = sys_pipe2((void *) tf->a0, tf->a1);
+		break;
+
 	case 1000:
 		debug_print((void *) tf->a0);
 		break;

@@ -112,11 +112,16 @@ struct segment {
 };
 
 struct filedesc {
+	bool alloc;
+	bool ondisk;
+	mode_t ftype;
 	u32 inum;
 	int fd_flags;
 	int *status_flags;
-	off_t *offset;
+	off_t *roffset;
+	off_t *woffset;
 	size_t *refcnt;
+	void *pipebuf;
 };
 
 struct proc {

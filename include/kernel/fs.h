@@ -19,6 +19,7 @@
 #define	O_NOFOLLOW  0x100000
 #define	O_DIRECTORY 0x200000
 #define	O_EXEC      0x400000
+#define	O_SEARCH    O_EXEC
 #define	O_DIRECT    0x80000
 #define O_BINARY    0x10000
 #define O_TEXT      0x20000
@@ -48,19 +49,32 @@
 
 #define	FD_CLOEXEC 1
 
+#define	S_IRWXU (S_IRUSR | S_IWUSR | S_IXUSR)
 #define	S_IRUSR	0000400
 #define	S_IWUSR	0000200
 #define	S_IXUSR 0000100
+#define	S_IRWXG (S_IRGRP | S_IWGRP | S_IXGRP)
 #define	S_IRGRP	0000040
 #define	S_IWGRP	0000020
 #define	S_IXGRP 0000010
+#define	S_IRWXO (S_IROTH | S_IWOTH | S_IXOTH)
 #define	S_IROTH	0000004
 #define	S_IWOTH	0000002
 #define	S_IXOTH 0000001
 
-#define	R_OK	4
-#define	W_OK	2
-#define	X_OK	1
+#define F_OK 0
+#define	R_OK 4
+#define	W_OK 2
+#define	X_OK 1
+
+#define	S_IFMT   0170000
+#define	S_IFDIR  0040000
+#define	S_IFCHR  0020000
+#define	S_IFBLK  0060000
+#define	S_IFREG  0100000
+#define	S_IFLNK  0120000
+#define	S_IFSOCK 0140000
+#define	S_IFIFO  0010000
 
 struct stat {
 	dev_t st_dev;

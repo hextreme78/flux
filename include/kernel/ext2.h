@@ -94,8 +94,7 @@ typedef struct ext2_directory_entry ext2_directory_entry_t;
 #define EXT2_VALID_FS 1
 #define EXT2_ERROR_FS 2
 
-#define EXT2_FILE_FORMAT_MASK 0xf000
-#define EXT2_ACCESS_RIGHTS_MASK 0x0fff
+#define EXT2_S_IFMT 0xf000
 /* -- file format -- */
 #define EXT2_S_IFSOCK 0xc000 /* socket */
 #define EXT2_S_IFLNK  0xa000 /* symbolic link */
