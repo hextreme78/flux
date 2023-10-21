@@ -1124,3 +1124,29 @@ int sys_pipe2(int *pipefd, int flags)
 	return 0;
 }
 
+int sys_mkfifo(const char *path, mode_t mode)
+{
+	int err;
+	size_t pathlen;
+
+	pathlen = strnlen_user(path, PATH_MAX);
+	if (pathlen > PATH_MAX) {
+		return -ENAMETOOLONG;
+	}
+	char pathbuf[pathlen];
+	if (copy_from_user(pathbuf, path, pathlen)) {
+		return -EFAULT;
+	}
+
+	mutex_lock(&rootblkdev->lock);
+	err = ext2_mkfifo(rootblkdev, pathbuf, mode & ~curproc()->umask,
+			curproc()->uid, curproc()->gid, curproc()->cwd);
+	if (err) {
+		mutex_unlock(&rootblkdev->lock);
+		return err;
+	}
+	mutex_unlock(&rootblkdev->lock);
+
+	return 0;
+}
+

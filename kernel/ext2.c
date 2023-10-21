@@ -3258,3 +3258,96 @@ int ext2_utimes(ext2_blkdev_t *dev)
 	return 0;
 }
 
+static int ext2_fifo_create(ext2_blkdev_t *dev, u32 parent_inum, const char *name,
+		u16 mode, u16 uid, u16 gid)
+{
+	int err = 0;
+	u32 tmp;
+	ext2_inode_t parent_inode, inode;
+	size_t namelen = strlen(name);
+	u32 inum;
+
+	inode.i_mode = EXT2_S_IFIFO | mode;
+	inode.i_uid = uid;
+	inode.i_size = 0;
+	inode.i_atime = 0;
+	inode.i_ctime = 0;
+	inode.i_mtime = 0;
+	inode.i_dtime = 0;
+	inode.i_gid = gid;
+	inode.i_links_count = 1;
+	inode.i_blocks = 0;
+	inode.i_flags = 0;
+	inode.i_osd1 = 0;
+	bzero(inode.i_block, 15 * sizeof(u32));
+	inode.i_generation = 0;
+	inode.i_file_acl = 0;
+	inode.i_dir_acl = 0;
+	inode.i_faddr = 0;
+	bzero(inode.i_osd2, 12);
+
+	if (namelen > NAME_MAX) {
+		return -ENAMETOOLONG;
+	}
+
+	if (!namelen) {
+		return -EINVAL;
+	}
+
+	err = ext2_direntry_inum_by_name(dev, parent_inum, name, &tmp);
+	if (err != -ENOENT) {
+		return -EEXIST;
+	}
+
+	err = ext2_inode_read(dev, parent_inum, &parent_inode);
+	if (err) {
+		return err;
+	}
+
+	if ((parent_inode.i_mode & EXT2_S_IFMT) != EXT2_S_IFDIR) {
+		return -ENOTDIR;
+	}
+
+	err = ext2_inode_allocate(dev, &inum);
+	if (err) {
+		return err;
+	}
+
+	err = ext2_direntry_create(dev, parent_inum, inum, name, EXT2_FT_FIFO);
+	if (err) {
+		return err;
+	}
+
+	err = ext2_inode_write(dev, inum, &inode);
+	if (err) {
+		return err;
+	}
+
+	return 0;
+}
+
+int ext2_mkfifo(ext2_blkdev_t *dev, const char *path, u16 mode, u16 uid, u16 gid,
+		u32 relinum)
+{
+	int err;
+	u32 parent_inum;
+	size_t pathlen = strlen(path);
+	char pathcopy0[pathlen + 1], pathcopy1[pathlen + 1];
+	char *pathname, *filename;
+	mode &= ~EXT2_S_IFMT;
+	strcpy(pathcopy0, path);
+	strcpy(pathcopy1, path);
+	pathname = dirname(pathcopy0);
+	filename = basename(pathcopy1);
+	err = ext2_file_lookup(dev, pathname, &parent_inum, relinum, true,
+			uid, gid, false, true, true, true);
+	if (err) {
+		return err;
+	}
+	err = ext2_fifo_create(dev, parent_inum, filename, mode, uid, gid);
+	if (err) {
+		return err;
+	}
+	return 0;
+}
+

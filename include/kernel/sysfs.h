@@ -37,6 +37,7 @@ int sys_truncate(const char *path, off_t length);
 int sys_creat(const char *path, mode_t mode);
 int sys_access(const char *path, int mode);
 int sys_pipe2(int *pipefd, int flags);
+int sys_mkfifo(const char *pathname, mode_t mode);
 
 #endif
 

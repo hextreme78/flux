@@ -319,6 +319,8 @@ int ext2_lchown(ext2_blkdev_t *dev, const char *path, u16 uid, u16 gid, u32 reli
 		u16 uidval, u16 gidval);
 int ext2_access(ext2_blkdev_t *dev, const char *path, int mode, u16 uid, u16 gid,
 		u32 relinum);
+int ext2_mkfifo(ext2_blkdev_t *dev, const char *path, u16 mode, u16 uid, u16 gid,
+		u32 relinum);
 
 #endif
 

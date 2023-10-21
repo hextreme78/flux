@@ -193,7 +193,7 @@ void syscall(void)
 		break;
 
 	case SYS_mkfifo:
-
+		ret = sys_mkfifo((void *) tf->a0, tf->a1);
 		break;
 
 	case SYS_access:

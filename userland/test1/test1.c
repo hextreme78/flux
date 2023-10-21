@@ -18,6 +18,12 @@ void sys_printf(const char *fmt, ...)
 
 int main(void)
 {
+
+	if (mkfifo("/fifine", 0777) < 0) {
+		sys_printf("test\n");
+		return 0;
+	}
+	/*
 	char str1[] = "Hello, world!\n";
 	char str0[] = ".............\n";
 	int fds[2];
@@ -34,6 +40,7 @@ int main(void)
 
 	close(fds[0]);
 	close(fds[1]);
+	*/
 
 	/*
 	if (chmod("/", 0777) < 0) {
