@@ -1,6 +1,6 @@
 ARCH = riscv64
 PLATFORM = virt
-TOOLCHAIN_PREFIX = riscv64-unknown-elf
+TOOLCHAIN_PREFIX = riscv64-flux
 TARGET = kernel-$(ARCH)-$(PLATFORM)
 
 QEMU_SMP = 1
@@ -27,22 +27,21 @@ OBJECTLIST = \
 	))
 
 CFLAGS = \
+	$(shell sed -e 's/^/-D/' config) \
 	-Iinclude \
-	-std=gnu99 \
 	-c \
 	-Wall \
+	-std=gnu99 \
+	-mcmodel=medany \
 	-ffreestanding \
 	-fno-pie \
-	-no-pie \
 	-Og \
-	-g \
-	-nostartfiles \
-	-mcmodel=medany \
-	$(shell sed -e 's/^/-D/' config)
+	-g
 
 LDFLAGS = \
 	-Tkernel/kernel.ld \
-	-nostdlib
+	-nostdlib \
+	-static
 
 QEMUFLAGS = \
 	-machine $(PLATFORM) \

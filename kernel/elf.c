@@ -60,11 +60,6 @@ static Elf64_Ehdr *elf_ehdr_isvalid(void *elf, size_t elfsz)
 		return NULL;
 	}
 
-	/* arch check */
-	if (ehdr->e_machine != EM_RISCV) {
-		return NULL;
-	}
-
 	return ehdr;
 }
 

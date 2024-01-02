@@ -89,6 +89,8 @@ static proc_t *proc_slot_alloc(void)
 
 	proc->uid = 0;
 	proc->gid = 0;
+	proc->euid = 0;
+	proc->egid = 0;
 	proc->cwd = 2;
 	proc->umask = 0;
 

@@ -29,107 +29,26 @@ void syscall(void)
 
 	switch (sysnum) {
 	case SYS_exit:
-		/* never returns */
 		sys_exit(tf->a0);
-
-	case SYS_close:
-		ret = sys_close(tf->a0);
-		break;
-
-	case SYS_execve:
-
-		break;
-
-	case SYS_fork:
-		break;
-
-	case SYS_stat:
-		ret = sys_stat((void *) tf->a0, (void *) tf->a1);
-		break;
-
-	case SYS_getpid:
-		ret = sys_getpid();
-		break;
-
-	case SYS_isatty:
-
-		break;
-
-	case SYS_kill:
-		break;
-
-	case SYS_link:
-		ret = sys_link((void *) tf->a0, (void *) tf->a1);
-		break;
-
-	case SYS_lseek:
-		ret = sys_lseek(tf->a0, tf->a1, tf->a2);
-		break;
-
-	case SYS_open:
-		ret = sys_open((void *) tf->a0, tf->a1, tf->a2);
-		break;
 
 	case SYS_read:
 		ret = sys_read(tf->a0, (void *) tf->a1, tf->a2);
-		break;
-
-	case SYS_sbrk:
-		break;
-
-	case SYS_times:
-		break;
-
-	case SYS_unlink:
-		ret = sys_unlink((void *) tf->a0);
-		break;
-
-	case SYS_wait:
-		ret = sys_wait((void *) tf->a0);
 		break;
 
 	case SYS_write:
 		ret = sys_write(tf->a0, (void *) tf->a1, tf->a2);
 		break;
 
-	case SYS_chdir:
-		ret = sys_chdir((void *) tf->a0);
+	case SYS_lseek:
+		ret = sys_lseek(tf->a0, tf->a1, tf->a2);
 		break;
 
-	case SYS_mkdir:
-		ret = sys_mkdir((void *) tf->a0, tf->a1);
+	case SYS_close:
+		ret = sys_close(tf->a0);
 		break;
 
-	case SYS_readlink:
-		ret = sys_readlink((void *) tf->a0, (void *) tf->a1, tf->a2);
-		break;
-
-	case SYS_rename:
-		ret = sys_rename((void *) tf->a0, (void *) tf->a1);
-		break;
-
-	case SYS_rmdir:
-		ret = sys_rmdir((void *) tf->a0);
-		break;
-
-	case SYS_symlink:
-		ret = sys_symlink((void *) tf->a0, (void *) tf->a1);
-		break;
-
-	case SYS_ftruncate:
-		ret = sys_ftruncate(tf->a0, tf->a1);
-		break;
-
-	case SYS_mknod:
-
-		break;
-
-	case SYS_getcwd:
-		ret = sys_getcwd((void *) tf->a0, tf->a1);
-		break;
-
-	case SYS_fcntl:
-		ret = sys_fcntl(tf->a0, tf->a1, tf->a2);
+	case SYS_faccessat:
+		ret = sys_faccessat(tf->a0, (void *) tf->a1, tf->a2, tf->a3);
 		break;
 
 	case SYS_dup:
@@ -139,76 +58,130 @@ void syscall(void)
 	case SYS_dup2:
 		ret = sys_dup2(tf->a0, tf->a1);
 		break;
-	
-	case SYS_dup3:
-		ret = sys_dup3(tf->a0, tf->a1, tf->a2);
+
+	case SYS_fstatat:
+		ret = sys_fstatat(tf->a0, (void *) tf->a1, (void *) tf->a2, tf->a3);
 		break;
 
-	case SYS_lstat:
-		ret = sys_lstat((void *) tf->a0, (void *) tf->a1);
-		break;
-
-	case SYS_umask:
-		ret = sys_umask(tf->a0);
-		break;
-
-	case SYS_chmod:
-		ret = sys_chmod((void *) tf->a0, tf->a1);
-		break;
-
-	case SYS_chown:
-		ret = sys_chown((void *) tf->a0, tf->a1, tf->a2);
-		break;
-
-	case SYS_lchown:
-		ret = sys_lchown((void *) tf->a0, tf->a1, tf->a2);
-		break;
-
-	case SYS_fstat:
-		ret = sys_fstat(tf->a0, (void *) tf->a1);
-		break;
-
-	case SYS_fchdir:
-		ret = sys_fchdir(tf->a0);
-		break;
-
-	case SYS_fchmod:
-		ret = sys_fchmod(tf->a0, tf->a1);
-		break;
-
-	case SYS_fchown:
-		ret = sys_fchown(tf->a0, tf->a1, tf->a2);
+	case SYS_readlink:
+		ret = sys_readlink((void *) tf->a0, (void *) tf->a1, tf->a2);
 		break;
 
 	case SYS_truncate:
-		ret = sys_truncate((void *) tf->a0, tf->a1);
+		ret = sys_truncate(tf->a0, (void *) tf->a1, tf->a2, tf->a3);
 		break;
 
-	case SYS_creat:
-		ret = sys_creat((void *) tf->a0, tf->a1);
+	case SYS_unlinkat:
+		ret = sys_unlinkat(tf->a0, (void *) tf->a1, tf->a2);
 		break;
 
-	case SYS_readdir:
-
+	case SYS_openat:
+		ret = sys_openat(tf->a0, (void *) tf->a1, tf->a2, tf->a3);
 		break;
 
-	case SYS_mkfifo:
-		ret = sys_mkfifo((void *) tf->a0, tf->a1);
+	case SYS_getpid:
+		ret = sys_getpid();
 		break;
 
-	case SYS_access:
-		ret = sys_access((void *) tf->a0, tf->a1);
+	case SYS_getppid:
+		ret = sys_getppid();
 		break;
 
-	case SYS_utimes:
+	case SYS_sleep:
+		ret = sys_sleep((void *) tf->a0, (void *) tf->a1);
+		break;
 
+	case SYS_fork:
+		ret = sys_fork();
+		break;
+
+	case SYS_execve:
+		ret = sys_execve((void *) tf->a0, (void *) tf->a1, (void *) tf->a2);
+		break;
+
+	case SYS_getcwd:
+		ret = sys_getcwd((void *) tf->a0, tf->a1);
+		break;
+
+	case SYS_chdir:
+		ret = sys_chdir(tf->a0, (void *) tf->a1, tf->a2);
+		break;
+
+	case SYS_mkdirat:
+		ret = sys_mkdirat(tf->a0, (void *) tf->a1, tf->a2);
+		break;
+
+	case SYS_linkat:
+		ret = sys_linkat(tf->a0, (void *) tf->a1,
+				tf->a2, (void *) tf->a3, tf->a4);
+		break;
+
+	case SYS_symlinkat:
+		ret = sys_symlinkat((void *) tf->a0, tf->a1, (void *) tf->a2);
+		break;
+
+	case SYS_renameat2:
+		ret = sys_renameat2(tf->a0, (void *) tf->a1,
+				tf->a2, (void *) tf->a3, tf->a4);
+		break;
+
+	case SYS_fcntl:
+		ret = sys_fcntl(tf->a0, tf->a1, tf->a2);
+		break;
+
+	case SYS_fchmodat:
+		ret = sys_fchmodat(tf->a0, (void *) tf->a1, tf->a2, tf->a3);
 		break;
 
 	case SYS_pipe2:
 		ret = sys_pipe2((void *) tf->a0, tf->a1);
 		break;
 
-	case 1000:
+	case SYS_mkfifoat:
+		ret = sys_mkfifoat(tf->a0, (void *) tf->a1, tf->a2);
+		break;
+
+	case SYS_mknodat:
+		ret = sys_mknodat(tf->a0, (void *) tf->a1, tf->a2, tf->a3);
+		break;
+
+	case SYS_umask:
+		ret = sys_umask(tf->a0);
+		break;
+
+	case SYS_fchownat:
+		ret = sys_fchownat(tf->a0, (void *) tf->a1, tf->a2, tf->a3, tf->a4);
+		break;
+
+	case SYS_uname:
+		ret = sys_uname((void *) tf->a0);
+		break;
+
+	case SYS_wait4:
+		ret = sys_wait4(tf->a0, (void *) tf->a1, tf->a2, (void *) tf->a3);
+		break;
+
+	case SYS_brk:
+		ret = sys_brk((void *) tf->a0);
+		break;
+
+	case SYS_getuid:
+		ret = sys_getuid();
+		break;
+
+	case SYS_geteuid:
+		ret = sys_geteuid();
+		break;
+
+	case SYS_getgid:
+		ret = sys_getgid();
+		break;
+
+	case SYS_getegid:
+		ret = sys_getegid();
+		break;
+
+	case 0:
 		debug_print((void *) tf->a0);
 		break;
 

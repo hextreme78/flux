@@ -14,6 +14,7 @@ typedef struct proc      proc_t;
 #include <kernel/list.h>
 #include <kernel/riscv64.h>
 #include <kernel/spinlock.h>
+#include <kernel/fs.h>
 
 #define PROC_STATE_KILLED    0
 #define PROC_STATE_PREPARING 1
@@ -115,18 +116,20 @@ struct filedesc {
 	bool alloc;
 	bool ondisk;
 	mode_t ftype;
-	u32 inum;
+	ino_t inum;
 	int fd_flags;
 	int *status_flags;
 	off_t *roffset;
 	off_t *woffset;
 	size_t *refcnt;
 	void *pipebuf;
+	opened_inode_t *opened_inode;
+	fifodesc_t *fifodesc;
 };
 
 struct proc {
 	spinlock_t lock;
-	u64 state;
+	int state;
 	void *wchan;
 
 	pid_t pid;
@@ -143,9 +146,11 @@ struct proc {
 	proc_t *parent;
 	list_t children;
 
-	u16 uid;
-	u16 gid;
-	u32 cwd;
+	uid_t uid;
+	uid_t euid;
+	gid_t gid;
+	gid_t egid;
+	ino_t cwd;
 
 	fd_t filetable[FD_MAX];
 	mode_t umask;

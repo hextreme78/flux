@@ -1,10 +1,12 @@
+#include <errno.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <string.h>
-#include <strings.h>
+#include <sys/stat.h>
+
 #include <stdio.h>
 #include <stdarg.h>
-#include <errno.h>
+
+#include <bits/syscall.h>
 
 void sys_printf(const char *fmt, ...)
 {
@@ -13,77 +15,78 @@ void sys_printf(const char *fmt, ...)
 	va_start(args, fmt);
 	vsprintf(buf, fmt, args);
 	va_end(args);
-	syscall(1000, buf);
+	syscall(0, buf);
 }
 
-int main(void)
+int main()
 {
+	sys_printf("Starting test\n");
 
-	if (mkfifo("/fifine", 0777) < 0) {
-		sys_printf("test\n");
-		return 0;
-	}
+	//int fd = open("/testfile", O_RDWR);
+
+	//sys_printf("%d\n", fd);
+
+	unlink("/testfile");
+
+	//close(fd);
+
 	/*
-	char str1[] = "Hello, world!\n";
-	char str0[] = ".............\n";
 	int fds[2];
+	fds[0] = open("/testfifo", O_RDWR);
+	fds[1] = open("/testfifo", O_RDWR);
 
-	if (pipe2(fds, 0) < 0) {
-		sys_printf("error: pipe2() errno=%d\n", errno);
-		return 0;
-	}
-
-	write(fds[1], str0, sizeof(str0));
-	read(fds[0], str1, sizeof(str0));
-
-	sys_printf("%s", str1);
+	char buf[100];
+	write(fds[1], "test\n", 6);
+	int a = read(fds[0], buf, 10);
 
 	close(fds[0]);
 	close(fds[1]);
+
+	sys_printf("a = %d\n", a);
+	sys_printf(buf);
 	*/
-
-	/*
-	if (chmod("/", 0777) < 0) {
-		sys_printf("error: 1. chmod() errno=%d\n", errno);
-		return 0;
+/*
+	int ret;
+	int fd = open("/testfile", O_RDWR | O_CREAT, S_IRWXU | S_IRWXG | S_IRWXO);
+	if (fd < 0) {
+		sys_printf("open() error %d\n", fd);
+		return -1;
 	}
 
-	if (mkdir("testdir", 0000) < 0) {
-		sys_printf("error: mkdir() errno=%d\n", errno);
-		return 0;
+	char str[] = "write test\n";
+	ssize_t nbytes = write(fd, str, sizeof(str));
+	if (nbytes < 0) {
+		sys_printf("write() error %d\n", nbytes);
+		return -1;
+	}
+*/
+/*
+	int ret;
+	int fd = open("/testfile", O_RDWR);
+	if (fd < 0) {
+		sys_printf("open() error %d\n", fd);
+		return -1;
+	}
+	
+	struct stat st;
+	if ((ret = stat("/testfile", &st))) {
+		sys_printf("stat() error %d\n", ret);
+		return -1;
 	}
 
-	if (chdir("testdir") < 0) {
-		sys_printf("error: 1. chdir() errno=%d\n", errno);
-	} else {
-		chdir("..");
-	}
-
-	if (chmod("testdir", 0700) < 0) {
-		sys_printf("error: 2. chmod() errno=%d\n", errno);
-		return 0;
-	}
-
-	if (chdir("testdir") < 0) {
-		sys_printf("error: 2. chdir() errno=%d\n", errno);
-	}
-
-	if (creat("testreg", 0070) < 0) {
-		sys_printf("error: creat() errno=%d\n", errno);
-		return 0;
-	}
-
-	char cwd[128];
-	if (!getcwd(cwd, sizeof(cwd))) {
-		sys_printf("error: getcwd() errno=%d\n", errno);
-		return 0;
-	}
-
-	sys_printf("%s\n", cwd);
-	*/
-
-
-	sys_printf("success\n");
+	sys_printf("st_dev     = %d\n", st.st_dev);
+	sys_printf("st_ino     = %d\n", st.st_ino);
+	sys_printf("st_mode    = %x\n", st.st_mode);
+	sys_printf("st_nlink   = %d\n", st.st_nlink);
+	sys_printf("st_uid     = %d\n", st.st_uid);
+	sys_printf("st_gid     = %d\n", st.st_gid);
+	sys_printf("st_rdev    = %d\n", st.st_rdev);
+	sys_printf("st_size    = %d\n", st.st_size);
+	sys_printf("st_blksize = %d\n", st.st_blksize);
+	sys_printf("st_blocks  = %d\n", st.st_blocks);
+	
+*/	
+	sys_printf("Success\n");
 	
 	return 0;
 }

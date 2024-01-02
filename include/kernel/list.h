@@ -19,6 +19,50 @@ typedef struct list list_t;
 			(pos) != (head); \
 			(pos) = list_next_entry(pos, field))
 
+#define list_search(search_value, head, field, cmp) \
+	({ \
+	 	typeof(*(search_value)) *result = NULL, *current; \
+		list_for_each_entry(current, head, field) { \
+			if (!cmp(search_value, current)) { \
+				result = current; \
+				break; \
+			} \
+		} \
+		result; \
+	)}
+
+#define sorted_list_search(search_value, head, field, cmp) \
+	({ \
+	 	typeof(*(search_value)) *result = NULL, *current; \
+		list_for_each_entry(current, head, field) { \
+			int cmp_result = cmp(search_value, current); \
+			if (!cmp_result) { \
+				result = current; \
+				break; \
+			} else if (cmp_result > 0) { \
+				break; \
+			} \
+		} \
+		result; \
+	})
+
+#define sorted_list_add(new, head, type, field, cmp) \
+	({ \
+		type *current = NULL; \
+		list_for_each_entry(current, head, field) { \
+			if (cmp(list_entry(new, type, field), current) <= 0) { \
+				new->next = current->field; \
+				new->prev = current->field->prev; \
+				current->field->prev = new; \
+				new->prev->next = new; \
+				break; \
+			} \
+		} \
+		if (current == NULL) { \
+			list_add_tail(new, head); \
+		} \
+	})
+
 struct list {
 	list_t *next, *prev;
 };

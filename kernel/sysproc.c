@@ -9,7 +9,47 @@ void sys_exit(int status)
 	sched_zombie();
 }
 
-pid_t sys_wait(int *status)
+pid_t sys_getpid(void)
+{
+	int irqflags;
+	pid_t pid;
+	spinlock_acquire_irqsave(&curproc()->lock, irqflags);
+	pid = curproc()->pid;
+	spinlock_release_irqrestore(&curproc()->lock, irqflags);
+	return pid;
+}
+
+pid_t sys_getppid(void)
+{
+	/* not implemented */
+	return 0;
+}
+
+int sys_sleep(const struct timespec *req, struct timespec *rem)
+{
+	/* not implemented */
+	return 0;
+}
+
+pid_t sys_fork(void)
+{
+	/* not implemented */
+	return 0;
+}
+
+int sys_execve(const char *pathname, char *const argv[], char *const envp[])
+{
+	/* not implemented */
+	return 0;
+}
+
+int sys_uname(struct utsname *buf)
+{
+	/* not implemented */
+	return 0;
+}
+
+pid_t sys_wait4(pid_t pid, int *status, int options, struct rusage *rusage)
 {
 	int irqflags;
 	u64 ret;
@@ -47,15 +87,32 @@ pid_t sys_wait(int *status)
 	spinlock_release_irqrestore(&child->lock, irqflags);
 
 	return ret;
+
 }
 
-pid_t sys_getpid(void)
+int sys_brk(void *addr)
 {
-	int irqflags;
-	pid_t pid;
-	spinlock_acquire_irqsave(&curproc()->lock, irqflags);
-	pid = curproc()->pid;
-	spinlock_release_irqrestore(&curproc()->lock, irqflags);
-	return pid;
+	/* not implemented */
+	return 0;
+}
+
+uid_t sys_getuid(void)
+{
+	return curproc()->uid;
+}
+
+uid_t sys_geteuid(void)
+{
+	return curproc()->euid;
+}
+
+gid_t sys_getgid(void)
+{
+	return curproc()->gid;
+}
+
+gid_t sys_getegid(void)
+{
+	return curproc()->egid;
 }
 

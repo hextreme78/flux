@@ -276,51 +276,44 @@ void ext2_init(void);
 void ext2_root_mount(void);
 void ext2_root_umount(void);
 
-int ext2_nbytes_read(ext2_blkdev_t *dev, void *buf, u64 len, u64 offset);
-int ext2_nbytes_write(ext2_blkdev_t *dev, void *buf, u64 len, u64 offset);
+int ext2_nbytes_read(ext2_blkdev_t *dev, void *buf, size_t len, off_t offset);
+int ext2_nbytes_write(ext2_blkdev_t *dev, void *buf, size_t len, off_t offset);
+
 int ext2_file_lookup(ext2_blkdev_t *dev, const char *path,
-		u32 *inum, u32 relinum, bool followlink,
-		u16 uid, u16 gid,
+		ino_t *inum, ino_t relinum, bool followlink,
+		uid_t uid, gid_t gid,
 		bool r, bool w, bool x, bool s);
-int ext2_readlink(ext2_blkdev_t *dev, const char *path, char *pathbuf,
-		u16 uid, u16 gid, u32 relinum);
-int ext2_creat(ext2_blkdev_t *dev, const char *path, u16 mode,
-		u16 uid, u16 gid, u32 relinum);
-int ext2_link(ext2_blkdev_t *dev, const char *oldpath, const char *newpath,
-		u16 uid, u16 gid, u32 relinum);
-int ext2_mkdir(ext2_blkdev_t *dev, const char *path, u16 mode,
-		u16 uid, u16 gid, u32 relinum);
-int ext2_symlink(ext2_blkdev_t *dev, const char *path, u16 mode,
-		u16 uid, u16 gid, const char *symlink, u32 relinum);
-int ext2_unlink(ext2_blkdev_t *dev, const char *path, u16 uid, u16 gid, u32 relinum);
-int ext2_rmdir(ext2_blkdev_t *dev, const char *path, u16 uid, u16 gid, u32 relinum);
+
+int ext2_stat(ext2_blkdev_t *dev, ino_t inum, struct stat *st);
+int ext2_readlink(ext2_blkdev_t *dev, ino_t inum, char *pathbuf);
+int ext2_truncate(ext2_blkdev_t *dev, ino_t inum, size_t sz);
+int ext2_unlink_file(ext2_blkdev_t *dev, ino_t inum);
+int ext2_unlink_direntry_delete(ext2_blkdev_t *dev, const char *path, ino_t relinum);
+int ext2_creat(ext2_blkdev_t *dev, const char *path, mode_t mode,
+		uid_t uid, gid_t gid, ino_t relinum);
+int ext2_link(ext2_blkdev_t *dev, ino_t oldinum, const char *newpath,
+		uid_t uid, gid_t gid, ino_t relinum);
+int ext2_mkdir(ext2_blkdev_t *dev, const char *path, mode_t mode,
+		uid_t uid, gid_t gid, ino_t relinum);
+int ext2_symlink(ext2_blkdev_t *dev, const char *path, mode_t mode,
+		uid_t uid, gid_t gid, const char *symlink, ino_t relinum);
 int ext2_rename(ext2_blkdev_t *dev, const char *oldpath, const char *newpath,
-		u16 uid, u16 gid, u32 relinum);
-int ext2_ftruncate(ext2_blkdev_t *dev, u32 inum, size_t sz);
-int ext2_truncate(ext2_blkdev_t *dev, const char *path, size_t sz,
-		u16 uid, u16 gid, u32 relinum);
-int ext2_fstat(ext2_blkdev_t *dev, u32 inum, struct stat *st);
-int ext2_stat(ext2_blkdev_t *dev, const char *path, struct stat *st,
-		u16 uid, u16 gid, u32 relinum);
-ssize_t ext2_regular_read(ext2_blkdev_t *dev, u32 inum, void *buf, u64 len, u64 offset);
-ssize_t ext2_regular_write(ext2_blkdev_t *dev, u32 inum, void *buf, u64 len, u64 offset);
-int ext2_fchdir(ext2_blkdev_t *dev, u32 inum, u32 *cwd);
-int ext2_chdir(ext2_blkdev_t *dev, const char *path, u16 uid, u16 gid, u32 *cwd);
-int ext2_getcwd(ext2_blkdev_t *dev, u32 inum, char *buf, size_t size, u16 uid, u16 gid);
-int ext2_lstat(ext2_blkdev_t *dev, const char *path, struct stat *st,
-		u16 uid, u16 gid, u32 relinum);
-int ext2_fchmod(ext2_blkdev_t *dev, u32 inum, u16 mode);
-int ext2_chmod(ext2_blkdev_t *dev, const char *path, u16 mode,
-		u16 uid, u16 gid, u32 relinum);
-int ext2_fchown(ext2_blkdev_t *dev, u32 inum, u16 uid, u16 gid);
-int ext2_chown(ext2_blkdev_t *dev, const char *path, u16 uid, u16 gid,
-		u32 relinum, u16 uidval, u16 gidval);
-int ext2_lchown(ext2_blkdev_t *dev, const char *path, u16 uid, u16 gid, u32 relinum,
-		u16 uidval, u16 gidval);
-int ext2_access(ext2_blkdev_t *dev, const char *path, int mode, u16 uid, u16 gid,
-		u32 relinum);
-int ext2_mkfifo(ext2_blkdev_t *dev, const char *path, u16 mode, u16 uid, u16 gid,
-		u32 relinum);
+		uid_t uid, gid_t gid, ino_t relinum);
+ssize_t ext2_regular_read(ext2_blkdev_t *dev, ino_t inum, void *buf,
+		size_t len, off_t offset);
+ssize_t ext2_regular_write(ext2_blkdev_t *dev, ino_t inum, void *buf,
+		size_t len, off_t offset);
+int ext2_chdir(ext2_blkdev_t *dev, ino_t inum, ino_t *cwd);
+int ext2_getcwd(ext2_blkdev_t *dev, ino_t inum, char *buf, size_t size, uid_t uid, gid_t gid);
+int ext2_chmod(ext2_blkdev_t *dev, ino_t inum, mode_t mode);
+int ext2_chown(ext2_blkdev_t *dev, ino_t inum, uid_t uid, gid_t gid);
+int ext2_access(ext2_blkdev_t *dev, const char *path, int mode, uid_t uid, gid_t gid,
+		ino_t relinum);
+int ext2_mkfifo(ext2_blkdev_t *dev, const char *path, mode_t mode, uid_t uid, gid_t gid,
+		ino_t relinum);
+int ext2_mknod(ext2_blkdev_t *dev, const char *path, mode_t mode, dev_t device,
+		uid_t uid, gid_t gid, ino_t relinum);
+int ext2_directory_isempty(ext2_blkdev_t *dev, ino_t inum);
 
 #endif
 

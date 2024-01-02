@@ -148,10 +148,10 @@ char *dirname(char *path)
 
 size_t copy_to_user(void *to, const void *from, size_t n)
 {
-	size_t firstvpage = PA_TO_PN(to);
-	size_t lastvpage = PA_TO_PN((u8 *) to + n);
-	size_t ncopied = 0;
-	size_t inpage_off, inpage_len;
+	size_t firstvpage = PA_TO_PN(to),
+		lastvpage = PA_TO_PN((u8 *) to + n),
+		ncopied = 0, inpage_len;
+	off_t inpage_off;
 
 	for (size_t curvpage = firstvpage; curvpage <= lastvpage; curvpage++) {
 		u8 *curppage_addr;
@@ -185,10 +185,10 @@ size_t copy_to_user(void *to, const void *from, size_t n)
 
 size_t copy_from_user(void *to, const void *from, size_t n)
 {
-	size_t firstvpage = PA_TO_PN(from);
-	size_t lastvpage = PA_TO_PN((u8 *) from + n);
-	size_t ncopied = 0;
-	size_t inpage_off, inpage_len;
+	size_t firstvpage = PA_TO_PN(from),
+		lastvpage = PA_TO_PN((u8 *) from + n),
+		ncopied = 0, inpage_len;
+	off_t inpage_off;
 
 	for (size_t curvpage = firstvpage; curvpage <= lastvpage; curvpage++) {
 		u8 *curppage_addr;
@@ -225,10 +225,10 @@ size_t copy_from_user(void *to, const void *from, size_t n)
  */
 size_t strlen_user(const char *str)
 {
-	size_t firstvpage = PA_TO_PN(str);
-	size_t curvpage = firstvpage;
-	size_t len = 0;
-	size_t inpage_off, inpage_len;
+	size_t firstvpage = PA_TO_PN(str),
+		curvpage = firstvpage,
+		len = 0, inpage_len;
+	off_t inpage_off;
 
 	while (1) {
 		u8 *curppage_addr;
@@ -270,10 +270,10 @@ size_t strlen_user(const char *str)
  */
 size_t strnlen_user(const char *str, size_t n)
 {
-	size_t firstvpage = PA_TO_PN(str);
-	size_t curvpage = firstvpage;
-	size_t len = 0;
-	size_t inpage_off, inpage_len;
+	size_t firstvpage = PA_TO_PN(str),
+		curvpage = firstvpage,
+		len = 0, inpage_len;
+	off_t inpage_off;
 
 	while (1) {
 		u8 *curppage_addr;
@@ -313,10 +313,10 @@ size_t strnlen_user(const char *str, size_t n)
 
 size_t strncpy_from_user(char *to, const char *from, size_t n)
 {
-	size_t firstvpage = PA_TO_PN(from);
-	size_t lastvpage = PA_TO_PN((u8 *) from + n);
-	size_t ncopied = 0;
-	size_t inpage_off, inpage_len;
+	size_t firstvpage = PA_TO_PN(from),
+		lastvpage = PA_TO_PN((u8 *) from + n),
+		ncopied = 0, inpage_len;
+	off_t inpage_off;
 
 	for (size_t curvpage = firstvpage; curvpage <= lastvpage; curvpage++) {
 		u8 *curppage_addr;

@@ -1,11 +1,14 @@
-TOOLCHAIN_PREFIX = riscv64-unknown-elf
+TARGET = test1
+TOOLCHAIN_PREFIX = riscv64-flux
 
 CC = $(TOOLCHAIN_PREFIX)-gcc
+CFLAGS = \
+	 -Wall \
+	 -std=c99
 
-all: ../bin/test1
-
-../bin/test1:
-	$(CC) -std=c99 -Wall -fno-pie -no-pie -static test1.c -o ../bin/test1 -L../newlib -l:newlib.a
+all:
+	$(CC) $(CFLAGS) $(TARGET).c -o ../bin/$(TARGET)
 
 clean:
-	rm ../bin/test1
+	rm ../bin/$(TARGET)
+
