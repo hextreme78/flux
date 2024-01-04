@@ -360,3 +360,46 @@ size_t strncpy_from_user(char *to, const char *from, size_t n)
 	return ncopied;
 }
 
+size_t memset_user(void *to, int c, size_t n)
+{
+	size_t firstvpage = PA_TO_PN(to),
+		lastvpage = PA_TO_PN((u8 *) to + n),
+		ncopied = 0, inpage_len;
+	off_t inpage_off;
+
+	for (size_t curvpage = firstvpage; curvpage <= lastvpage; curvpage++) {
+		u8 *curppage_addr;
+		pte_t *pte = vm_getpte(curproc()->upagetable, curvpage);	
+		if (!pte || !pte->u || !pte->w) {
+			return n - ncopied;
+		}
+		curppage_addr = (u8 *) PN_TO_PA(pte->ppn);
+
+		if (curvpage == firstvpage) {
+			inpage_off = (size_t) to - PAGEDOWN(to);
+			if (PAGEUP(to) > (size_t) to + n) {
+				inpage_len = n;
+			} else {
+				inpage_len = PAGEUP(to) - (size_t) to;
+			}
+		} else if (curvpage == lastvpage) {
+			inpage_off = 0;
+			inpage_len = n - ncopied;
+		} else {
+			inpage_off = 0;
+			inpage_len = PAGESZ;
+		}
+
+		memset(curppage_addr + inpage_off, c, inpage_len);
+
+		ncopied += inpage_len;
+	}
+
+	return 0;
+}
+
+size_t bzero_user(void *to, size_t n)
+{
+	return memset_user(to, '\0', n);
+}
+

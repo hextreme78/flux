@@ -18,17 +18,14 @@ int sys_unlinkat(int dirfd, const char *pathname, int flags);
 int sys_openat(int dirfd, const char *pathname, int flags, mode_t mode);
 int sys_getcwd(char *buf, size_t size);
 int sys_chdir(int fd, const char *path, int flags);
-int sys_mkdirat(int dirfd, const char *path, mode_t mode);
 int sys_linkat(int olddirfd, const char *oldpath,
 		int newdirfd, const char *newpath, int flags);
-int sys_symlinkat(const char *target, int newdirfd, const char *linkpath);
 int sys_renameat2(int olddirfd, const char *oldpath,
 		int newdirfd, const char *newpath, unsigned int flags);
 int sys_fcntl(int fd, int cmd, int arg);
 int sys_fchmodat(int dirfd, const char *pathname, mode_t mode, int flags);
 int sys_pipe2(int *pipefd, int flags);
-int sys_mkfifoat(int dirfd, const char *pathname, mode_t mode);
-int sys_mknodat(int dirfd, const char *pathname, mode_t mode, dev_t dev);
+int sys_mknodat(int dirfd, const char *path, mode_t mode, dev_t dev, const char *symlink);
 mode_t sys_umask(mode_t mask);
 int sys_fchownat(int dirfd, const char *pathname,
 		uid_t owner, gid_t group, int flags);

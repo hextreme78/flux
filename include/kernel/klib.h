@@ -25,6 +25,8 @@ size_t copy_from_user(void *to, const void *from, size_t n);
 size_t strlen_user(const char *str);
 size_t strnlen_user(const char *str, size_t n);
 size_t strncpy_from_user(char *to, const char *from, size_t n);
+size_t memset_user(void *to, int c, size_t n);
+size_t bzero_user(void *to, size_t n);
 
 char *basename(char *path);
 char *dirname(char *path);

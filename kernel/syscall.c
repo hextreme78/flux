@@ -107,17 +107,9 @@ void syscall(void)
 		ret = sys_chdir(tf->a0, (void *) tf->a1, tf->a2);
 		break;
 
-	case SYS_mkdirat:
-		ret = sys_mkdirat(tf->a0, (void *) tf->a1, tf->a2);
-		break;
-
 	case SYS_linkat:
 		ret = sys_linkat(tf->a0, (void *) tf->a1,
 				tf->a2, (void *) tf->a3, tf->a4);
-		break;
-
-	case SYS_symlinkat:
-		ret = sys_symlinkat((void *) tf->a0, tf->a1, (void *) tf->a2);
 		break;
 
 	case SYS_renameat2:
@@ -137,12 +129,9 @@ void syscall(void)
 		ret = sys_pipe2((void *) tf->a0, tf->a1);
 		break;
 
-	case SYS_mkfifoat:
-		ret = sys_mkfifoat(tf->a0, (void *) tf->a1, tf->a2);
-		break;
-
 	case SYS_mknodat:
-		ret = sys_mknodat(tf->a0, (void *) tf->a1, tf->a2, tf->a3);
+		ret = sys_mknodat(tf->a0, (void *) tf->a1, tf->a2, tf->a3,
+				(void *) tf->a4);
 		break;
 
 	case SYS_umask:

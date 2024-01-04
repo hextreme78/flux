@@ -1847,73 +1847,6 @@ int ext2_file_lookup(ext2_blkdev_t *dev, const char *path,
 			uid, gid, r, w, x, s, SYMLINK_MAX_DEPTH);
 }
 
-static int ext2_regular_create(ext2_blkdev_t *dev, ino_t parent_inum, const char *name,
-		mode_t mode, uid_t uid, gid_t gid)
-{
-	int err = 0;
-	ext2_inode_t parent_inode, inode;
-	size_t namelen = strlen(name);
-	ino_t inum, tmp;
-
-	inode.i_mode = EXT2_S_IFREG | mode;
-	inode.i_uid = uid;
-	inode.i_size = 0;
-	inode.i_atime = 0;
-	inode.i_ctime = 0;
-	inode.i_mtime = 0;
-	inode.i_dtime = 0;
-	inode.i_gid = gid;
-	inode.i_links_count = 1;
-	inode.i_blocks = 0;
-	inode.i_flags = 0;
-	inode.i_osd1 = 0;
-	bzero(inode.i_block, 15 * sizeof(u32));
-	inode.i_generation = 0;
-	inode.i_file_acl = 0;
-	inode.i_dir_acl = 0;
-	inode.i_faddr = 0;
-	bzero(inode.i_osd2, 12);
-
-	if (namelen > NAME_MAX) {
-		return -ENAMETOOLONG;
-	}
-
-	if (!namelen) {
-		return -EINVAL;
-	}
-
-	err = ext2_direntry_inum_by_name(dev, parent_inum, name, &tmp);
-	if (err != -ENOENT) {
-		return -EEXIST;
-	}
-
-	err = ext2_inode_read(dev, parent_inum, &parent_inode);
-	if (err) {
-		return err;
-	}
-
-	if ((parent_inode.i_mode & EXT2_S_IFMT) != EXT2_S_IFDIR) {
-		return -ENOTDIR;
-	}
-
-	err = ext2_inode_allocate(dev, &inum);
-	if (err) {
-		return err;
-	}
-
-	err = ext2_direntry_create(dev, parent_inum, inum, name, EXT2_FT_REG_FILE);
-	if (err) {
-		return err;
-	}
-
-	err = ext2_inode_write(dev, inum, &inode);
-	if (err) {
-		return err;
-	}
-
-	return 0;
-}
-
 static int ext2_hardlink_create(ext2_blkdev_t *dev, ino_t parent_inum, ino_t inum,
 		const char *name)
 {
@@ -1965,7 +1898,7 @@ static int ext2_hardlink_create(ext2_blkdev_t *dev, ino_t parent_inum, ino_t inu
 static int ext2_directory_create(ext2_blkdev_t *dev, ino_t parent_inum, const char *name,
 		mode_t mode, uid_t uid, gid_t gid)
 {
-	int err = 0;
+	int err;
 	ext2_inode_t parent_inode, inode;
 	size_t namelen = strlen(name);
 	ino_t inum, tmp;
@@ -2064,9 +1997,9 @@ static int ext2_directory_create(ext2_blkdev_t *dev, ino_t parent_inum, const ch
 }
 
 static int ext2_symlink_create(ext2_blkdev_t *dev, ino_t parent_inum, const char *name,
-		mode_t mode, uid_t uid, gid_t gid, const char *symlink)
+		mode_t mode, const char *symlink, uid_t uid, gid_t gid)
 {
-	int err = 0;
+	int err;
 	ext2_inode_t parent_inode, inode;
 	size_t namelen = strlen(name);
 	size_t linklen = strlen(symlink);
@@ -2330,31 +2263,6 @@ static int ext2_directory_absolute_path(ext2_blkdev_t *dev, ino_t inum, char *bu
 	return 0;
 }
 
-int ext2_creat(ext2_blkdev_t *dev, const char *path, mode_t mode,
-		uid_t uid, gid_t gid, ino_t relinum)
-{
-	int err;
-	ino_t parent_inum;
-	size_t pathlen = strlen(path);
-	char pathcopy0[pathlen], pathcopy1[pathlen];
-	char *pathname, *filename;
-	mode &= ~EXT2_S_IFMT;
-	strcpy(pathcopy0, path);
-	strcpy(pathcopy1, path);
-	pathname = dirname(pathcopy0);
-	filename = basename(pathcopy1);
-	err = ext2_file_lookup(dev, pathname, &parent_inum, relinum, true,
-			uid, gid, false, true, true, true);
-	if (err) {
-		return err;
-	}
-	err = ext2_regular_create(dev, parent_inum, filename, mode, uid, gid);
-	if (err) {
-		return err;
-	}
-	return 0;
-}
-
 int ext2_link(ext2_blkdev_t *dev, ino_t oldinum, const char *newpath,
 		uid_t uid, gid_t gid, ino_t newrelinum)
 {
@@ -2374,56 +2282,6 @@ int ext2_link(ext2_blkdev_t *dev, ino_t oldinum, const char *newpath,
 		return err;
 	}
 	err = ext2_hardlink_create(dev, parent_inum, oldinum, filename);
-	if (err) {
-		return err;
-	}
-	return 0;
-}
-
-int ext2_mkdir(ext2_blkdev_t *dev, const char *path, mode_t mode,
-		uid_t uid, gid_t gid, ino_t relinum)
-{
-	int err;
-	ino_t parent_inum;
-	size_t pathlen = strlen(path);
-	char pathcopy0[pathlen + 1], pathcopy1[pathlen + 1];
-	char *pathname, *filename;
-	mode &= ~EXT2_S_IFMT;
-	strcpy(pathcopy0, path);
-	strcpy(pathcopy1, path);
-	pathname = dirname(pathcopy0);
-	filename = basename(pathcopy1);
-	err = ext2_file_lookup(dev, pathname, &parent_inum, relinum, true,
-			uid, gid, false, true, true, true);
-	if (err) {
-		return err;
-	}
-	err = ext2_directory_create(dev, parent_inum, filename, mode, uid, gid);
-	if (err) {
-		return err;
-	}
-	return 0;
-}
-
-int ext2_symlink(ext2_blkdev_t *dev, const char *path, mode_t mode,
-		uid_t uid, gid_t gid, const char *symlink, ino_t relinum)
-{
-	int err;
-	ino_t parent_inum;
-	size_t pathlen = strlen(path);
-	char pathcopy0[pathlen], pathcopy1[pathlen];
-	char *pathname, *filename;
-	mode &= ~EXT2_S_IFMT;
-	strcpy(pathcopy0, path);
-	strcpy(pathcopy1, path);
-	pathname = dirname(pathcopy0);
-	filename = basename(pathcopy1);
-	err = ext2_file_lookup(dev, pathname, &parent_inum, relinum, true,
-			uid, gid, false, true, true, true);
-	if (err) {
-		return err;
-	}
-	err = ext2_symlink_create(dev, parent_inum, filename, mode, uid, gid, symlink);
 	if (err) {
 		return err;
 	}
@@ -2830,106 +2688,13 @@ int ext2_utimes(ext2_blkdev_t *dev)
 	return 0;
 }
 
-static int ext2_fifo_create(ext2_blkdev_t *dev, ino_t parent_inum, const char *name,
-		mode_t mode, uid_t uid, gid_t gid)
+static int ext2_create(ext2_blkdev_t *dev, ino_t parent_inum, const char *name,
+		mode_t mode, dev_t device, uid_t uid, gid_t gid)
 {
-	int err = 0;
+	int err;
 	ext2_inode_t parent_inode, inode;
 	size_t namelen = strlen(name);
 	ino_t inum, tmp;
-
-	inode.i_mode = EXT2_S_IFIFO | mode;
-	inode.i_uid = uid;
-	inode.i_size = 0;
-	inode.i_atime = 0;
-	inode.i_ctime = 0;
-	inode.i_mtime = 0;
-	inode.i_dtime = 0;
-	inode.i_gid = gid;
-	inode.i_links_count = 1;
-	inode.i_blocks = 0;
-	inode.i_flags = 0;
-	inode.i_osd1 = 0;
-	bzero(inode.i_block, 15 * sizeof(u32));
-	inode.i_generation = 0;
-	inode.i_file_acl = 0;
-	inode.i_dir_acl = 0;
-	inode.i_faddr = 0;
-	bzero(inode.i_osd2, 12);
-
-	if (namelen > NAME_MAX) {
-		return -ENAMETOOLONG;
-	}
-
-	if (!namelen) {
-		return -EINVAL;
-	}
-
-	err = ext2_direntry_inum_by_name(dev, parent_inum, name, &tmp);
-	if (err != -ENOENT) {
-		return -EEXIST;
-	}
-
-	err = ext2_inode_read(dev, parent_inum, &parent_inode);
-	if (err) {
-		return err;
-	}
-
-	if ((parent_inode.i_mode & EXT2_S_IFMT) != EXT2_S_IFDIR) {
-		return -ENOTDIR;
-	}
-
-	err = ext2_inode_allocate(dev, &inum);
-	if (err) {
-		return err;
-	}
-
-	err = ext2_direntry_create(dev, parent_inum, inum, name, EXT2_FT_FIFO);
-	if (err) {
-		return err;
-	}
-
-	err = ext2_inode_write(dev, inum, &inode);
-	if (err) {
-		return err;
-	}
-
-	return 0;
-}
-
-int ext2_mkfifo(ext2_blkdev_t *dev, const char *path, mode_t mode, uid_t uid, gid_t gid,
-		ino_t relinum)
-{
-	int err;
-	ino_t parent_inum;
-	size_t pathlen = strlen(path);
-	char pathcopy0[pathlen + 1], pathcopy1[pathlen + 1];
-	char *pathname, *filename;
-	mode &= ~EXT2_S_IFMT;
-	strcpy(pathcopy0, path);
-	strcpy(pathcopy1, path);
-	pathname = dirname(pathcopy0);
-	filename = basename(pathcopy1);
-	err = ext2_file_lookup(dev, pathname, &parent_inum, relinum, true,
-			uid, gid, false, true, true, true);
-	if (err) {
-		return err;
-	}
-	err = ext2_fifo_create(dev, parent_inum, filename, mode, uid, gid);
-	if (err) {
-		return err;
-	}
-	return 0;
-}
-
-static int ext2_nod_create(ext2_blkdev_t *dev, ino_t parent_inum, const char *name,
-		mode_t mode, dev_t device, uid_t uid, gid_t gid)
-{
-/*	int err = 0;
-	ino_t tmp;
-	ext2_inode_t parent_inode, inode;
-	size_t namelen = strlen(name);
-	ino_t inum;
 
 	inode.i_mode = mode;
 	inode.i_uid = uid;
@@ -2944,6 +2709,7 @@ static int ext2_nod_create(ext2_blkdev_t *dev, ino_t parent_inum, const char *na
 	inode.i_flags = 0;
 	inode.i_osd1 = 0;
 	bzero(inode.i_block, 15 * sizeof(u32));
+	inode.i_block[0] = device;
 	inode.i_generation = 0;
 	inode.i_file_acl = 0;
 	inode.i_dir_acl = 0;
@@ -2977,7 +2743,8 @@ static int ext2_nod_create(ext2_blkdev_t *dev, ino_t parent_inum, const char *na
 		return err;
 	}
 
-	err = ext2_direntry_create(dev, parent_inum, inum, name, EXT2_FT_FIFO);
+	err = ext2_direntry_create(dev, parent_inum, inum, name,
+			EXT2_STYPE_TO_FTTYPE(inode.i_mode & EXT2_S_IFMT));
 	if (err) {
 		return err;
 	}
@@ -2986,19 +2753,45 @@ static int ext2_nod_create(ext2_blkdev_t *dev, ino_t parent_inum, const char *na
 	if (err) {
 		return err;
 	}
-*/
+
 	return 0;
 }
 
+static int ext2_nod_create(ext2_blkdev_t *dev, ino_t parent_inum, const char *name,
+		mode_t mode, dev_t device, const char *symlink, uid_t uid, gid_t gid)
+{
+	int err = 0;
+	switch (mode & EXT2_S_IFMT) {
+	case EXT2_S_IFLNK:
+		err = ext2_symlink_create(dev, parent_inum, name, mode,
+				symlink, uid, gid);
+		break;
+	case EXT2_S_IFDIR: 
+		err = ext2_directory_create(dev, parent_inum, name, mode, uid, gid);
+		break;
+	case EXT2_S_IFBLK: 
+	case EXT2_S_IFCHR: 
+		err = ext2_create(dev, parent_inum, name, mode, device, uid, gid);
+		break;
+	case EXT2_S_IFSOCK:
+	case EXT2_S_IFREG:
+	case EXT2_S_IFIFO: 
+		err = ext2_create(dev, parent_inum, name, mode, 0, uid, gid);
+		break;
+	default:
+		err = -EINVAL;
+	}
+	return err;
+}
+
 int ext2_mknod(ext2_blkdev_t *dev, const char *path, mode_t mode, dev_t device,
-		uid_t uid, gid_t gid, ino_t relinum)
+		const char *symlink, uid_t uid, gid_t gid, ino_t relinum)
 {
 	int err;
 	ino_t parent_inum;
 	size_t pathlen = strlen(path);
 	char pathcopy0[pathlen + 1], pathcopy1[pathlen + 1];
 	char *pathname, *filename;
-	mode &= ~EXT2_S_IFMT;
 	strcpy(pathcopy0, path);
 	strcpy(pathcopy1, path);
 	pathname = dirname(pathcopy0);
@@ -3008,7 +2801,8 @@ int ext2_mknod(ext2_blkdev_t *dev, const char *path, mode_t mode, dev_t device,
 	if (err) {
 		return err;
 	}
-	err = ext2_nod_create(dev, parent_inum, filename, mode, device, uid, gid);
+	err = ext2_nod_create(dev, parent_inum, filename, mode, device,
+			symlink, uid, gid);
 	if (err) {
 		return err;
 	}
@@ -3031,7 +2825,12 @@ int ext2_stat(ext2_blkdev_t *dev, ino_t inum, struct stat *st)
 	st->st_nlink = inode.i_links_count;
 	st->st_uid = inode.i_uid;
 	st->st_gid = inode.i_gid;
-	st->st_rdev = 0;
+	if ((inode.i_mode & EXT2_S_IFMT) == EXT2_S_IFBLK ||
+			(inode.i_mode & EXT2_S_IFMT) == EXT2_S_IFCHR) {
+		st->st_rdev = inode.i_block[0];
+	} else {
+		st->st_rdev = 0;
+	}
 	st->st_size = EXT2_INODE_GET_I_SIZE(dev, inode);
 	st->st_atim.tv_sec = inode.i_atime;
 	st->st_atim.tv_nsec = 0;

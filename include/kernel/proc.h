@@ -125,6 +125,7 @@ struct filedesc {
 	void *pipebuf;
 	opened_inode_t *opened_inode;
 	fifodesc_t *fifodesc;
+	dev_t rdev;
 };
 
 struct proc {

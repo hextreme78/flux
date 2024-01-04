@@ -92,7 +92,7 @@ static proc_t *proc_slot_alloc(void)
 	proc->euid = 0;
 	proc->egid = 0;
 	proc->cwd = 2;
-	proc->umask = 0;
+	proc->umask = S_IFMT;
 
 	return proc;
 }

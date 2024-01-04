@@ -5,6 +5,7 @@
 
 #include <stdio.h>
 #include <stdarg.h>
+#include <string.h>
 
 #include <bits/syscall.h>
 
@@ -18,48 +19,32 @@ void sys_printf(const char *fmt, ...)
 	syscall(0, buf);
 }
 
+static inline dev_t makedev(int major, int minor)
+{
+	return ((major & 0xff) << 8) | (minor & 0xff);
+}
+
 int main()
 {
 	sys_printf("Starting test\n");
 
-	//int fd = open("/testfile", O_RDWR);
-
-	//sys_printf("%d\n", fd);
-
-	unlink("/testfile");
-
-	//close(fd);
-
 	/*
-	int fds[2];
-	fds[0] = open("/testfifo", O_RDWR);
-	fds[1] = open("/testfifo", O_RDWR);
-
-	char buf[100];
-	write(fds[1], "test\n", 6);
-	int a = read(fds[0], buf, 10);
-
-	close(fds[0]);
-	close(fds[1]);
-
-	sys_printf("a = %d\n", a);
-	sys_printf(buf);
+	mkdir("/dev", 0777);
+	mknod("/dev/zero", S_IFCHR | 0777, makedev(1, 4));
 	*/
-/*
+	
 	int ret;
-	int fd = open("/testfile", O_RDWR | O_CREAT, S_IRWXU | S_IRWXG | S_IRWXO);
+	int fd = open("/dev/zero", O_RDWR);
 	if (fd < 0) {
 		sys_printf("open() error %d\n", fd);
 		return -1;
 	}
 
-	char str[] = "write test\n";
-	ssize_t nbytes = write(fd, str, sizeof(str));
-	if (nbytes < 0) {
-		sys_printf("write() error %d\n", nbytes);
-		return -1;
-	}
-*/
+	char buf[128] = "Hello, world!!!\n";
+	ret = read(fd, buf, strlen(buf));
+	sys_printf("str is %s\n", buf);
+	sys_printf("%d\n", ret);
+
 /*
 	int ret;
 	int fd = open("/testfile", O_RDWR);
