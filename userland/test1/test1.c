@@ -9,30 +9,42 @@
 
 #include <bits/syscall.h>
 
-void sys_printf(const char *fmt, ...)
+#define makedev(major, minor) ((((major) & 0xff) << 8) | ((minor) & 0xff))
+
+void tprintf(const char *fmt, ...)
 {
 	char buf[256];
 	va_list args;
 	va_start(args, fmt);
 	vsprintf(buf, fmt, args);
 	va_end(args);
-	syscall(0, buf);
-}
-
-static inline dev_t makedev(int major, int minor)
-{
-	return ((major & 0xff) << 8) | (minor & 0xff);
+	write(1, buf, strlen(buf));
+	fsync(1);
 }
 
 int main()
 {
-	sys_printf("Starting test\n");
+	tprintf("Starting test\n");
+
+	char buf[128];
+	memset(buf, '\0', sizeof(buf));
+	read(0, buf, 5);
+	tprintf("%s\n", buf);
 
 	/*
 	mkdir("/dev", 0777);
-	mknod("/dev/zero", S_IFCHR | 0777, makedev(1, 4));
+	mknod("/dev/console", S_IFCHR | 0777, makedev(2, 0));
+	mknod("/dev/tty", S_IFCHR | 0777, makedev(2, 1));
+	mknod("/dev/stdin", S_IFCHR | 0777, makedev(2, 2));
+	mknod("/dev/stdout", S_IFCHR | 0777, makedev(2, 3));
+	mknod("/dev/stderr", S_IFCHR | 0777, makedev(2, 4));
+	mknod("/dev/tty0", S_IFCHR | 0777, makedev(2, 5));
+	mknod("/dev/ttyS0", S_IFCHR | 0777, makedev(2, 6));
 	*/
-	
+
+	//printf("Hello, world!\n");
+
+/*	
 	int ret;
 	int fd = open("/dev/zero", O_RDWR);
 	if (fd < 0) {
@@ -44,7 +56,7 @@ int main()
 	ret = read(fd, buf, strlen(buf));
 	sys_printf("str is %s\n", buf);
 	sys_printf("%d\n", ret);
-
+*/
 /*
 	int ret;
 	int fd = open("/testfile", O_RDWR);
@@ -71,8 +83,8 @@ int main()
 	sys_printf("st_blocks  = %d\n", st.st_blocks);
 	
 */	
-	sys_printf("Success\n");
-	
+	tprintf("Success\n");
+
 	return 0;
 }
 

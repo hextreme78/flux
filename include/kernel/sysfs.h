@@ -29,6 +29,9 @@ int sys_mknodat(int dirfd, const char *path, mode_t mode, dev_t dev, const char 
 mode_t sys_umask(mode_t mask);
 int sys_fchownat(int dirfd, const char *pathname,
 		uid_t owner, gid_t group, int flags);
+int sys_isatty(int fd);
+int sys_fsync(int fd);
+int sys_fdatasync(int fd);
 
 #endif
 

@@ -96,23 +96,186 @@ int sys_brk(void *addr)
 	return 0;
 }
 
-uid_t sys_getuid(void)
+int sys_getresuid(uid_t *ruid, uid_t *euid, uid_t *suid)
 {
-	return curproc()->uid;
+	if (ruid) {
+		if (copy_to_user(ruid, &curproc()->ruid, sizeof(uid_t))) {
+			return -EFAULT;
+		}
+	}
+	if (euid) {
+		if (copy_to_user(euid, &curproc()->euid, sizeof(uid_t))) {
+			return -EFAULT;
+		}
+	}
+	if (suid) {
+		if (copy_to_user(suid, &curproc()->suid, sizeof(uid_t))) {
+			return -EFAULT;
+		}
+	}
+	return 0;
 }
 
-uid_t sys_geteuid(void)
+int sys_getresgid(gid_t *rgid, gid_t *egid, gid_t *sgid)
 {
-	return curproc()->euid;
+	if (rgid) {
+		if (copy_to_user(rgid, &curproc()->rgid, sizeof(gid_t))) {
+			return -EFAULT;
+		}
+	}
+	if (egid) {
+		if (copy_to_user(egid, &curproc()->egid, sizeof(gid_t))) {
+			return -EFAULT;
+		}
+	}
+	if (sgid) {
+		if (copy_to_user(sgid, &curproc()->sgid, sizeof(gid_t))) {
+			return -EFAULT;
+		}
+	}
+	return 0;
 }
 
-gid_t sys_getgid(void)
+int sys_setuid(uid_t uid)
 {
-	return curproc()->gid;
+	if (!curproc()->euid || !curproc()->egid) {
+		curproc()->ruid = curproc()->euid = curproc()->suid = uid;
+	} else if (uid == curproc()->ruid ||
+			uid == curproc()->euid ||
+			uid == curproc()->suid) {
+		curproc()->euid = uid;
+	}
+	return -EPERM;
 }
 
-gid_t sys_getegid(void)
+int sys_setgid(gid_t gid)
 {
-	return curproc()->egid;
+	if (!curproc()->euid || !curproc()->egid) {
+		curproc()->rgid = curproc()->egid = curproc()->sgid = gid;
+	} else if (gid == curproc()->rgid ||
+			gid == curproc()->egid ||
+			gid == curproc()->sgid) {
+		curproc()->egid = gid;
+	}
+	return -EPERM;
+}
+
+int sys_setresuid(uid_t ruid, uid_t euid, uid_t suid)
+{
+	uid_t curruid = curproc()->ruid,
+		cureuid = curproc()->euid,
+		cursuid = curproc()->suid;
+	if (ruid != -1) {
+		if (!curproc()->euid || !curproc()->egid ||
+				ruid == curruid ||
+				ruid == cureuid ||
+				ruid == cursuid) {
+			curproc()->ruid = ruid;
+		} else {
+			return -EPERM;
+		}
+	}
+	if (euid != -1) {
+		if (!curproc()->euid || !curproc()->egid ||
+				euid == curruid ||
+				euid == cureuid ||
+				euid == cursuid) {
+			curproc()->euid = euid;
+		} else {
+			curproc()->ruid = curruid;
+			return -EPERM;
+		}
+	}
+	if (suid != -1) {
+		if (!curproc()->euid || !curproc()->egid ||
+				suid == curruid ||
+				suid == cureuid ||
+				suid == cursuid) {
+			curproc()->suid = suid;
+		} else {
+			curproc()->ruid = curruid;
+			curproc()->euid = cureuid;
+			return -EPERM;
+		}
+	}
+	return 0;
+}
+
+int sys_setresgid(gid_t rgid, gid_t egid, uid_t sgid)
+{
+	gid_t currgid = curproc()->rgid,
+		curegid = curproc()->egid,
+		cursgid = curproc()->sgid;
+	if (rgid != -1) {
+		if (!curproc()->euid || !curproc()->egid ||
+				rgid == currgid ||
+				rgid == curegid ||
+				rgid == cursgid) {
+			curproc()->rgid = rgid;
+		} else {
+			return -EPERM;
+		}
+	}
+	if (egid != -1) {
+		if (!curproc()->euid || !curproc()->egid ||
+				egid == currgid ||
+				egid == curegid ||
+				egid == cursgid) {
+			curproc()->egid = egid;
+		} else {
+			curproc()->rgid = currgid;
+			return -EPERM;
+		}
+	}
+	if (sgid != -1) {
+		if (!curproc()->euid || !curproc()->egid ||
+				sgid == currgid ||
+				sgid == curegid ||
+				sgid == cursgid) {
+			curproc()->sgid = sgid;
+		} else {
+			curproc()->rgid = currgid;
+			curproc()->egid = curegid;
+			return -EPERM;
+		}
+	}
+	return 0;
+}
+
+pid_t sys_getsid(pid_t pid)
+{
+	/* not implemented */
+	return 0;
+}
+
+pid_t sys_setsid(void)
+{
+	int irqflags, ret;
+	pid_t sid;
+	spinlock_acquire_irqsave(&curproc()->lock, irqflags);
+	if (curproc()->pid == curproc()->sid) {
+		ret = -1;
+	} else {
+		ret = curproc()->sid = curproc()->pid;
+	}
+	spinlock_release_irqrestore(&curproc()->lock, irqflags);
+	return ret;
+}
+
+pid_t sys_getpgid(pid_t pid)
+{
+	/* not implemented */
+	return 0;
+}
+
+int sys_setpgid(pid_t pid, pid_t pgid)
+{
+	/* not implemented */
+	return 0;
+}
+
+pid_t sys_gettid(void)
+{
+	return sys_getpid();
 }
 

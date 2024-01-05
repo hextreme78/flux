@@ -4,6 +4,7 @@
 #include <kernel/spinlock.h>
 #include <kernel/kprintf.h>
 #include <kernel/plic-sifive.h>
+#include <kernel/sched.h>
 
 /* uart tx ring buffer */
 static spinlock_t uart_tx_lock;
@@ -109,7 +110,7 @@ char uart_getch_async(void)
 	spinlock_acquire_irqsave(&uart_rx_lock, irqflags);
 	while (uart_rx_r == uart_rx_w) {
 		spinlock_release_irqrestore(&uart_rx_lock, irqflags);
-		wfi();
+		sched();
 		spinlock_acquire_irqsave(&uart_rx_lock, irqflags);
 	}
 	ch = uart_rx_ring[uart_rx_r];

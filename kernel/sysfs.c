@@ -3,9 +3,11 @@
 #include <kernel/klib.h>
 #include <kernel/alloc.h>
 #include <kernel/dev.h>
+#include <kernel/cdev-tty.h>
 
 ssize_t sys_read(int fd, void *buf, size_t count)
 {
+	int irqflags = 0;
 	size_t roffset, woffset, upperbound = PIPEBUF_NPAGES * PAGESZ;
 	void *kbuf, *pipebuf;
 	if (fd < 0 || fd >= FD_MAX || !curproc()->filetable[fd].alloc) {
@@ -53,7 +55,7 @@ ssize_t sys_read(int fd, void *buf, size_t count)
 
 	case S_IFIFO:
 		if (curproc()->filetable[fd].ondisk) {
-			spinlock_acquire(&fifodescs_lock);
+			spinlock_acquire_irqsave(&fifodescs_lock, irqflags);
 			roffset = curproc()->filetable[fd].fifodesc->roffset;
 			woffset = curproc()->filetable[fd].fifodesc->woffset;
 			pipebuf = curproc()->filetable[fd].fifodesc->pipebuf;
@@ -74,21 +76,24 @@ ssize_t sys_read(int fd, void *buf, size_t count)
 			if (copy_to_user(buf, pipebuf + roffset,
 						upperbound - roffset)) {
 				if (curproc()->filetable[fd].ondisk) {
-					spinlock_release(&fifodescs_lock);
+					spinlock_release_irqrestore(&fifodescs_lock,
+							irqflags);
 				}
 				return -EFAULT;
 			}
 			if (copy_to_user(buf + upperbound - roffset, pipebuf,
 						count - upperbound + roffset)) {
 				if (curproc()->filetable[fd].ondisk) {
-					spinlock_release(&fifodescs_lock);
+					spinlock_release_irqrestore(&fifodescs_lock,
+							irqflags);
 				}
 				return -EFAULT;
 			}
 		} else {
 			if (copy_to_user(buf, pipebuf + roffset, count)) {
 				if (curproc()->filetable[fd].ondisk) {
-					spinlock_release(&fifodescs_lock);
+					spinlock_release_irqrestore(&fifodescs_lock,
+							irqflags);
 				}
 				return -EFAULT;
 			}
@@ -97,7 +102,7 @@ ssize_t sys_read(int fd, void *buf, size_t count)
 		if (curproc()->filetable[fd].ondisk) {
 			curproc()->filetable[fd].fifodesc->roffset =
 				(roffset + count) % upperbound;
-			spinlock_release(&fifodescs_lock);
+			spinlock_release_irqrestore(&fifodescs_lock, irqflags);
 		} else {
 			*curproc()->filetable[fd].roffset =
 				(roffset + count) % upperbound;
@@ -114,6 +119,7 @@ ssize_t sys_read(int fd, void *buf, size_t count)
 
 ssize_t sys_write(int fd, const void *buf, size_t count)
 {
+	int irqflags = 0;
 	size_t roffset, woffset, upperbound = PIPEBUF_NPAGES * PAGESZ;
 	void *kbuf, *pipebuf;
 	if (fd < 0 || fd >= FD_MAX || !curproc()->filetable[fd].alloc) {
@@ -158,7 +164,7 @@ ssize_t sys_write(int fd, const void *buf, size_t count)
 
 	case S_IFIFO:
 		if (curproc()->filetable[fd].ondisk) {
-			spinlock_acquire(&fifodescs_lock);
+			spinlock_acquire_irqsave(&fifodescs_lock, irqflags);
 			roffset = curproc()->filetable[fd].fifodesc->roffset;
 			woffset = curproc()->filetable[fd].fifodesc->woffset;
 			pipebuf = curproc()->filetable[fd].fifodesc->pipebuf;
@@ -179,21 +185,24 @@ ssize_t sys_write(int fd, const void *buf, size_t count)
 			if (copy_from_user(pipebuf + woffset, buf,
 						upperbound - woffset)) {
 				if (curproc()->filetable[fd].ondisk) {
-					spinlock_release(&fifodescs_lock);
+					spinlock_release_irqrestore(&fifodescs_lock,
+							irqflags);
 				}
 				return -EFAULT;
 			}
 			if (copy_from_user(pipebuf, buf + upperbound - woffset,
 						count - upperbound + woffset)) {
 				if (curproc()->filetable[fd].ondisk) {
-					spinlock_release(&fifodescs_lock);
+					spinlock_release_irqrestore(&fifodescs_lock,
+							irqflags);
 				}
 				return -EFAULT;
 			}
 		} else {
 			if (copy_from_user(pipebuf + woffset, buf, count)) {
 				if (curproc()->filetable[fd].ondisk) {
-					spinlock_release(&fifodescs_lock);
+					spinlock_release_irqrestore(&fifodescs_lock,
+							irqflags);
 				}
 				return -EFAULT;
 			}
@@ -202,7 +211,7 @@ ssize_t sys_write(int fd, const void *buf, size_t count)
 		if (curproc()->filetable[fd].ondisk) {
 			curproc()->filetable[fd].fifodesc->woffset =
 				(woffset + count) % upperbound;
-			spinlock_release(&fifodescs_lock);
+			spinlock_release_irqrestore(&fifodescs_lock, irqflags);
 		} else {
 			*curproc()->filetable[fd].woffset =
 				(woffset + count) % upperbound;
@@ -257,7 +266,7 @@ off_t sys_lseek(int fd, off_t offset, int whence)
 
 int sys_close(int fd)
 {
-	int err;
+	int err, irqflags;
 	bool deletemark = false;
 	if (fd < 0 || fd >= FD_MAX || !curproc()->filetable[fd].alloc) {
 		return -EBADFD;
@@ -301,7 +310,7 @@ int sys_close(int fd)
 			kfree(curproc()->filetable[fd].woffset);
 			kpage_free(curproc()->filetable[fd].pipebuf);
 		}
-		spinlock_acquire(&opened_inodes_lock);
+		spinlock_acquire_irqsave(&opened_inodes_lock, irqflags);
 		curproc()->filetable[fd].opened_inode->refcnt--;
 		if (!curproc()->filetable[fd].opened_inode->refcnt) {
 			deletemark = curproc()->filetable[fd].opened_inode->deletemark;
@@ -309,7 +318,7 @@ int sys_close(int fd)
 					opened_inodes_list);
 			kfree(curproc()->filetable[fd].opened_inode);
 		}
-		spinlock_release(&opened_inodes_lock);
+		spinlock_release_irqrestore(&opened_inodes_lock, irqflags);
 	}
 	
 	if (deletemark) {
@@ -321,11 +330,11 @@ int sys_close(int fd)
 		}
 		if (curproc()->filetable[fd].ftype == S_IFIFO &&
 				curproc()->filetable[fd].ondisk) {
-			spinlock_acquire(&fifodescs_lock);
+			spinlock_acquire_irqsave(&fifodescs_lock, irqflags);
 			list_del(&curproc()->filetable[fd].fifodesc->fifodescs_list);
 			kpage_free(curproc()->filetable[fd].fifodesc->pipebuf);
 			kfree(curproc()->filetable[fd].fifodesc);
-			spinlock_release(&fifodescs_lock);
+			spinlock_release_irqrestore(&fifodescs_lock, irqflags);
 		}
 	}
 
@@ -361,8 +370,8 @@ int sys_faccessat(int dirfd, const char *path, int mode, int flags)
 		uid = curproc()->euid;
 		gid = curproc()->egid;
 	} else {
-		uid = curproc()->uid;
-		gid = curproc()->gid;
+		uid = curproc()->ruid;
+		gid = curproc()->rgid;
 	}
 
 	mutex_lock(&rootblkdev->lock);
@@ -414,33 +423,6 @@ int sys_dup2(int oldfd, int newfd)
 	}
 	curproc()->filetable[newfd] = curproc()->filetable[oldfd];
 	++*curproc()->filetable[newfd].refcnt;
-	return newfd;
-}
-
-int sys_dup3(int oldfd, int newfd, int flags)
-{
-	if (oldfd < 0 || oldfd >= FD_MAX || !curproc()->filetable[oldfd].alloc) {
-		return -EBADFD;
-	}
-	if (newfd < 0 || newfd >= FD_MAX) {
-		return -EBADFD;
-	}
-	if (newfd == oldfd) {
-		return -EINVAL;
-	}
-	if (curproc()->filetable[newfd].alloc) {
-		int ret;
-		if ((ret = sys_close(newfd))) {
-			return ret;
-		}
-	}
-	curproc()->filetable[newfd] = curproc()->filetable[oldfd];
-	++*curproc()->filetable[newfd].refcnt;
-	if (flags & O_CLOEXEC) {
-		curproc()->filetable[newfd].fd_flags = FD_CLOEXEC;
-	} else {
-		curproc()->filetable[newfd].fd_flags = 0;
-	}
 	return newfd;
 }
 
@@ -607,7 +589,7 @@ int sys_truncate(int fd, const char *path, off_t length, int flags)
 
 int sys_unlinkat(int dirfd, const char *path, int flags)
 {
-	int err;
+	int err, irqflags;
 	size_t pathlen;
 	ino_t relinum, inum;
 	opened_inode_t opened_inode, *opened_inode_ptr;
@@ -644,23 +626,23 @@ int sys_unlinkat(int dirfd, const char *path, int flags)
 		return err;
 	}
 
-	spinlock_acquire(&opened_inodes_lock);
+	spinlock_acquire_irqsave(&opened_inodes_lock, irqflags);
 	opened_inode.inum = inum;
 	opened_inode_ptr = sorted_list_search(&opened_inode, &opened_inodes,
 			opened_inodes_list, opened_inodes_cmp);
 	if (opened_inode_ptr) {
 		opened_inode_ptr->deletemark = true;
-		spinlock_release(&opened_inodes_lock);
+		spinlock_release_irqrestore(&opened_inodes_lock, irqflags);
 		err = ext2_unlink_direntry_delete(rootblkdev, pathbuf, relinum);
 		if (err) {
-			spinlock_release(&opened_inodes_lock);
+			spinlock_release_irqrestore(&opened_inodes_lock, irqflags);
 			mutex_unlock(&rootblkdev->lock);
 			return err;
 		}
 	} else {
-		spinlock_release(&opened_inodes_lock);
-		
-		spinlock_acquire(&fifodescs_lock);
+		spinlock_release_irqrestore(&opened_inodes_lock, irqflags);
+
+		spinlock_acquire_irqsave(&fifodescs_lock, irqflags);
 		fifodesc.inum = inum;
 		fifodesc_ptr = sorted_list_search(&fifodesc, &fifodescs,
 				fifodescs_list, fifodescs_cmp);
@@ -669,7 +651,7 @@ int sys_unlinkat(int dirfd, const char *path, int flags)
 			kpage_free(fifodesc_ptr->pipebuf);
 			kfree(fifodesc_ptr);	
 		}
-		spinlock_release(&fifodescs_lock);
+		spinlock_release_irqrestore(&fifodescs_lock, irqflags);
 
 		ext2_unlink_direntry_delete(rootblkdev, pathbuf, relinum);
 		if (err) {
@@ -689,7 +671,7 @@ int sys_unlinkat(int dirfd, const char *path, int flags)
 
 int sys_openat(int dirfd, const char *path, int flags, mode_t mode)
 {
-	int err;
+	int err, irqflags;
 	opened_inode_t opened_inode;
 	fifodesc_t fifodesc;
 	struct stat st;
@@ -733,7 +715,7 @@ int sys_openat(int dirfd, const char *path, int flags, mode_t mode)
 	if (!curproc()->filetable[fd].status_flags) {
 		return -ENOMEM;
 	}
-	curproc()->filetable[fd].refcnt = kmalloc(sizeof(size_t));
+	curproc()->filetable[fd].refcnt = kmalloc(sizeof(int));
 	if (!curproc()->filetable[fd].refcnt) {
 		kfree(curproc()->filetable[fd].status_flags);
 		return -ENOMEM;
@@ -781,6 +763,7 @@ int sys_openat(int dirfd, const char *path, int flags, mode_t mode)
 		curproc()->filetable[fd].opened_inode = NULL;
 		curproc()->filetable[fd].fifodesc = NULL;
 		curproc()->filetable[fd].rdev = st.st_rdev;
+		curproc()->filetable[fd].rdev_data = NULL;
 		*curproc()->filetable[fd].status_flags = flags;
 		if (flags & O_CLOEXEC) {
 			curproc()->filetable[fd].fd_flags = FD_CLOEXEC;
@@ -796,7 +779,7 @@ int sys_openat(int dirfd, const char *path, int flags, mode_t mode)
 			curproc()->filetable[fd].alloc = false;
 			return err;
 		}
-		return 0;
+		return fd;
 	} else if ((st.st_mode & S_IFMT) == S_IFBLK) {
 		mutex_unlock(&rootblkdev->lock);
 		curproc()->filetable[fd].alloc = true;
@@ -809,6 +792,7 @@ int sys_openat(int dirfd, const char *path, int flags, mode_t mode)
 		curproc()->filetable[fd].opened_inode = NULL;
 		curproc()->filetable[fd].fifodesc = NULL;
 		curproc()->filetable[fd].rdev = st.st_rdev;
+		curproc()->filetable[fd].rdev_data = NULL;
 		if (flags & O_CLOEXEC) {
 			curproc()->filetable[fd].fd_flags = FD_CLOEXEC;
 		} else {
@@ -823,7 +807,7 @@ int sys_openat(int dirfd, const char *path, int flags, mode_t mode)
 			curproc()->filetable[fd].alloc = false;
 			return err;
 		}
-		return 0;
+		return fd;
 	}
 
 	curproc()->filetable[fd].roffset =
@@ -835,7 +819,7 @@ int sys_openat(int dirfd, const char *path, int flags, mode_t mode)
 		return -ENOMEM;
 	}
 
-	spinlock_acquire(&opened_inodes_lock);
+	spinlock_acquire_irqsave(&opened_inodes_lock, irqflags);
 	opened_inode.inum = inum;
 	curproc()->filetable[fd].opened_inode = sorted_list_search(
 			&opened_inode, &opened_inodes,
@@ -843,7 +827,7 @@ int sys_openat(int dirfd, const char *path, int flags, mode_t mode)
 	if (!curproc()->filetable[fd].opened_inode) {
 		curproc()->filetable[fd].opened_inode = kmalloc(sizeof(opened_inode));
 		if (!curproc()->filetable[fd].opened_inode) {
-			spinlock_release(&opened_inodes_lock);
+			spinlock_release_irqrestore(&opened_inodes_lock, irqflags);
 			mutex_unlock(&rootblkdev->lock);
 			kfree(curproc()->filetable[fd].refcnt);
 			kfree(curproc()->filetable[fd].status_flags);
@@ -860,10 +844,10 @@ int sys_openat(int dirfd, const char *path, int flags, mode_t mode)
 	} else {
 		curproc()->filetable[fd].opened_inode->refcnt++;
 	}
-	spinlock_release(&opened_inodes_lock);
+	spinlock_release_irqrestore(&opened_inodes_lock, irqflags);
 
 	if ((st.st_mode & S_IFMT) == S_IFIFO) {
-		spinlock_acquire(&fifodescs_lock);
+		spinlock_acquire_irqsave(&fifodescs_lock, irqflags);
 		fifodesc.inum = inum;
 		curproc()->filetable[fd].fifodesc = sorted_list_search(
 				&fifodesc, &fifodescs,
@@ -871,19 +855,20 @@ int sys_openat(int dirfd, const char *path, int flags, mode_t mode)
 		if (!curproc()->filetable[fd].fifodesc) {
 			curproc()->filetable[fd].fifodesc = kmalloc(sizeof(fifodesc));
 			if (!curproc()->filetable[fd].fifodesc) {
-				spinlock_release(&fifodescs_lock);
+				spinlock_release_irqrestore(&fifodescs_lock, irqflags);
 				mutex_unlock(&rootblkdev->lock);
 				kfree(curproc()->filetable[fd].refcnt);
 				kfree(curproc()->filetable[fd].status_flags);
 				kfree(curproc()->filetable[fd].roffset);
-				spinlock_acquire(&opened_inodes_lock);
+				spinlock_acquire_irqsave(&opened_inodes_lock, irqflags);
 				curproc()->filetable[fd].opened_inode->refcnt--;
 				if (!curproc()->filetable[fd].opened_inode->refcnt) {
 					list_del(&curproc()->filetable[fd].opened_inode->
 							opened_inodes_list);
 					kfree(curproc()->filetable[fd].opened_inode);
 				}
-				spinlock_release(&opened_inodes_lock);
+				spinlock_release_irqrestore(&opened_inodes_lock,
+						irqflags);
 				return -ENOMEM;
 			}
 
@@ -893,27 +878,28 @@ int sys_openat(int dirfd, const char *path, int flags, mode_t mode)
 			curproc()->filetable[fd].fifodesc->pipebuf =
 				kpage_alloc(PIPEBUF_NPAGES);
 			if (!curproc()->filetable[fd].fifodesc->pipebuf) {
-				spinlock_release(&fifodescs_lock);
+				spinlock_release_irqrestore(&fifodescs_lock, irqflags);
 				mutex_unlock(&rootblkdev->lock);
 				kfree(curproc()->filetable[fd].refcnt);
 				kfree(curproc()->filetable[fd].status_flags);
 				kfree(curproc()->filetable[fd].roffset);
 				kfree(curproc()->filetable[fd].fifodesc);
-				spinlock_acquire(&opened_inodes_lock);
+				spinlock_acquire_irqsave(&opened_inodes_lock, irqflags);
 				curproc()->filetable[fd].opened_inode->refcnt--;
 				if (!curproc()->filetable[fd].opened_inode->refcnt) {
 					list_del(&curproc()->filetable[fd].opened_inode->
 							opened_inodes_list);
 					kfree(curproc()->filetable[fd].opened_inode);
 				}
-				spinlock_release(&opened_inodes_lock);
+				spinlock_release_irqrestore(&opened_inodes_lock,
+						irqflags);
 				return -ENOMEM;
 			}
 
 			list_add(&curproc()->filetable[fd].fifodesc->fifodescs_list,
 					&fifodescs.fifodescs_list);
 		}
-		spinlock_release(&fifodescs_lock);
+		spinlock_release_irqrestore(&fifodescs_lock, irqflags);
 	}
 
 	if (flags & O_TRUNC) {
@@ -922,14 +908,14 @@ int sys_openat(int dirfd, const char *path, int flags, mode_t mode)
 			kfree(curproc()->filetable[fd].refcnt);
 			kfree(curproc()->filetable[fd].status_flags);
 			kfree(curproc()->filetable[fd].roffset);
-			spinlock_acquire(&opened_inodes_lock);
+			spinlock_acquire_irqsave(&opened_inodes_lock, irqflags);
 			curproc()->filetable[fd].opened_inode->refcnt--;
 			if (!curproc()->filetable[fd].opened_inode->refcnt) {
 				list_del(&curproc()->filetable[fd].opened_inode->
 						opened_inodes_list);
 				kfree(curproc()->filetable[fd].opened_inode);
 			}
-			spinlock_release(&opened_inodes_lock);
+			spinlock_release_irqrestore(&opened_inodes_lock, irqflags);
 			return -EBADFD;
 		}
 
@@ -939,14 +925,14 @@ int sys_openat(int dirfd, const char *path, int flags, mode_t mode)
 			kfree(curproc()->filetable[fd].refcnt);
 			kfree(curproc()->filetable[fd].status_flags);
 			kfree(curproc()->filetable[fd].roffset);
-			spinlock_acquire(&opened_inodes_lock);
+			spinlock_acquire_irqsave(&opened_inodes_lock, irqflags);
 			curproc()->filetable[fd].opened_inode->refcnt--;
 			if (!curproc()->filetable[fd].opened_inode->refcnt) {
 				list_del(&curproc()->filetable[fd].opened_inode->
 						opened_inodes_list);
 				kfree(curproc()->filetable[fd].opened_inode);
 			}
-			spinlock_release(&opened_inodes_lock);
+			spinlock_release_irqrestore(&opened_inodes_lock, irqflags);
 			return err;
 		}
 	}
@@ -1455,6 +1441,47 @@ int sys_fchownat(int dirfd, const char *path, uid_t uid, gid_t gid, int flags)
 	mutex_unlock(&rootblkdev->lock);
 	if (err) {
 		return err;
+	}
+
+	return 0;
+}
+
+int sys_isatty(int fd)
+{
+	if (fd < 0 || fd >= FD_MAX || !curproc()->filetable[fd].alloc) {
+		return -EBADFD;
+	}
+	if (major(curproc()->filetable[fd].rdev) == CDEV_TTY_MAJOR) {
+		return 1;
+	}
+	return -ENOTTY;
+}
+
+int sys_fsync(int fd)
+{
+	if (fd < 0 || fd >= FD_MAX || !curproc()->filetable[fd].alloc) {
+		return -EBADFD;
+	}
+
+	if (curproc()->filetable[fd].ftype == S_IFCHR) {
+		return character_device_driver_fsync(&curproc()->filetable[fd]);
+	} else if (curproc()->filetable[fd].ftype == S_IFBLK) {
+		return block_device_driver_fsync(&curproc()->filetable[fd]);
+	}
+
+	return 0;
+}
+
+int sys_fdatasync(int fd)
+{
+	if (fd < 0 || fd >= FD_MAX || !curproc()->filetable[fd].alloc) {
+		return -EBADFD;
+	}
+
+	if (curproc()->filetable[fd].ftype == S_IFCHR) {
+		return character_device_driver_fdatasync(&curproc()->filetable[fd]);
+	} else if (curproc()->filetable[fd].ftype == S_IFBLK) {
+		return block_device_driver_fdatasync(&curproc()->filetable[fd]);
 	}
 
 	return 0;

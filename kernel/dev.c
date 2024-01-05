@@ -1,6 +1,7 @@
 #include <kernel/dev.h>
 #include <kernel/kprintf.h>
 #include <kernel/cdev-mem.h>
+#include <kernel/cdev-tty.h>
 
 static struct device_driver_table_entry
 	character_device_driver_table[DEVICE_DRIVER_TABLE_SIZE],
@@ -16,6 +17,10 @@ void dev_init(void)
 	err = character_device_driver_register(CDEV_MEM_MAJOR, &cdev_mem);
 	if (err) {
 		panic("can not register mem cdev");
+	}
+	err = character_device_driver_register(CDEV_TTY_MAJOR, &cdev_tty);
+	if (err) {
+		panic("can not register tty cdev");
 	}
 }
 
@@ -134,6 +139,38 @@ off_t character_device_driver_lseek(fd_t *fd, off_t offset, int whence)
 	return ret;
 }
 
+int character_device_driver_fsync(fd_t *fd)
+{
+	int ret = 0;
+	device_driver_t *device_driver;
+	if (major(fd->rdev) < 0 || major(fd->rdev) >= DEVICE_DRIVER_TABLE_SIZE) {
+		return -EINVAL;
+	}
+	mutex_lock(&character_device_driver_table[major(fd->rdev)].lock);
+	device_driver = character_device_driver_table[major(fd->rdev)].device_driver;
+	if (device_driver->device_driver_fsync) {
+		ret = device_driver->device_driver_fsync(fd);
+	}
+	mutex_unlock(&character_device_driver_table[major(fd->rdev)].lock);
+	return ret;
+}
+
+int character_device_driver_fdatasync(fd_t *fd)
+{
+	int ret = 0;
+	device_driver_t *device_driver;
+	if (major(fd->rdev) < 0 || major(fd->rdev) >= DEVICE_DRIVER_TABLE_SIZE) {
+		return -EINVAL;
+	}
+	mutex_lock(&character_device_driver_table[major(fd->rdev)].lock);
+	device_driver = character_device_driver_table[major(fd->rdev)].device_driver;
+	if (device_driver->device_driver_fdatasync) {
+		ret = device_driver->device_driver_fdatasync(fd);
+	}
+	mutex_unlock(&character_device_driver_table[major(fd->rdev)].lock);
+	return ret;
+}
+
 int block_device_driver_register(int major, device_driver_t *device_driver)
 {
 	int ret = 0;
@@ -244,6 +281,38 @@ off_t block_device_driver_lseek(fd_t *fd, off_t offset, int whence)
 	device_driver = block_device_driver_table[major(fd->rdev)].device_driver;
 	if (device_driver->device_driver_lseek) {
 		ret = device_driver->device_driver_lseek(fd, offset, whence);
+	}
+	mutex_unlock(&block_device_driver_table[major(fd->rdev)].lock);
+	return ret;
+}
+
+int block_device_driver_fsync(fd_t *fd)
+{
+	int ret = 0;
+	device_driver_t *device_driver;
+	if (major(fd->rdev) < 0 || major(fd->rdev) >= DEVICE_DRIVER_TABLE_SIZE) {
+		return -EINVAL;
+	}
+	mutex_lock(&block_device_driver_table[major(fd->rdev)].lock);
+	device_driver = block_device_driver_table[major(fd->rdev)].device_driver;
+	if (device_driver->device_driver_fsync) {
+		ret = device_driver->device_driver_fsync(fd);
+	}
+	mutex_unlock(&block_device_driver_table[major(fd->rdev)].lock);
+	return ret;
+}
+
+int block_device_driver_fdatasync(fd_t *fd)
+{
+	int ret = 0;
+	device_driver_t *device_driver;
+	if (major(fd->rdev) < 0 || major(fd->rdev) >= DEVICE_DRIVER_TABLE_SIZE) {
+		return -EINVAL;
+	}
+	mutex_lock(&block_device_driver_table[major(fd->rdev)].lock);
+	device_driver = block_device_driver_table[major(fd->rdev)].device_driver;
+	if (device_driver->device_driver_fdatasync) {
+		ret = device_driver->device_driver_fdatasync(fd);
 	}
 	mutex_unlock(&block_device_driver_table[major(fd->rdev)].lock);
 	return ret;

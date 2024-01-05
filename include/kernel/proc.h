@@ -126,6 +126,7 @@ struct filedesc {
 	opened_inode_t *opened_inode;
 	fifodesc_t *fifodesc;
 	dev_t rdev;
+	void *rdev_data;
 };
 
 struct proc {
@@ -134,6 +135,9 @@ struct proc {
 	void *wchan;
 
 	pid_t pid;
+	pid_t sid;
+	pid_t pgid;
+
 	int exit_status;
 
 	context_t *context;
@@ -147,14 +151,20 @@ struct proc {
 	proc_t *parent;
 	list_t children;
 
-	uid_t uid;
+	uid_t ruid;
 	uid_t euid;
-	gid_t gid;
+	uid_t suid;
+
+	gid_t rgid;
 	gid_t egid;
+	gid_t sgid;
+
 	ino_t cwd;
 
 	fd_t filetable[FD_MAX];
 	mode_t umask;
+
+	dev_t ctty;
 };
 
 void proc_init(void);

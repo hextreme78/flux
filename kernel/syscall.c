@@ -5,17 +5,6 @@
 #include <kernel/sysproc.h>
 #include <kernel/sysfs.h>
 
-void debug_print(const char *str)
-{
-	size_t len;
-	len = strlen_user(str);
-	char strbuf[len];
-	if (copy_from_user(strbuf, str, len)) {
-		return;
-	}
-	kprintf_s(strbuf);
-}
-
 void syscall(void)
 {
 	u64 ret = 0;
@@ -154,24 +143,56 @@ void syscall(void)
 		ret = sys_brk((void *) tf->a0);
 		break;
 
-	case SYS_getuid:
-		ret = sys_getuid();
+	case SYS_getresuid:
+		ret = sys_getresuid((void *) tf->a0, (void *) tf->a1, (void *) tf->a2);
 		break;
 
-	case SYS_geteuid:
-		ret = sys_geteuid();
+	case SYS_getresgid:
+		ret = sys_getresgid((void *) tf->a0, (void *) tf->a1, (void *) tf->a2);
 		break;
 
-	case SYS_getgid:
-		ret = sys_getgid();
+	case SYS_setuid:
+		ret = sys_setuid(tf->a0);
 		break;
 
-	case SYS_getegid:
-		ret = sys_getegid();
+	case SYS_setgid:
+		ret = sys_setgid(tf->a0);
 		break;
 
-	case 0:
-		debug_print((void *) tf->a0);
+	case SYS_setresuid:
+		ret = sys_setresuid(tf->a0, tf->a1, tf->a2);
+		break;
+
+	case SYS_setresgid:
+		ret = sys_setresgid(tf->a0, tf->a1, tf->a2);
+		break;
+
+	case SYS_isatty:
+		ret = sys_isatty(tf->a0);
+		break;
+
+	case SYS_getsid:
+		ret = sys_getsid(tf->a0);
+		break;
+
+	case SYS_setsid:
+		ret = sys_setsid();
+		break;
+
+	case SYS_getpgid:
+		ret = sys_getpgid(tf->a0);
+		break;
+
+	case SYS_setpgid:
+		ret = sys_setpgid(tf->a0, tf->a1);
+		break;
+
+	case SYS_fsync:
+		ret = sys_fsync(tf->a0);
+		break;
+
+	case SYS_fdatasync:
+		ret = sys_fdatasync(tf->a0);
 		break;
 
 	default:

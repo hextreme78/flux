@@ -38,7 +38,7 @@ static int cdev_mem_open(fd_t *fd, int flags, mode_t mode)
 	case CDEV_MEM_URANDOM:
 		break;
 	default:
-		ret = -EINVAL;
+		ret = -ENODEV;
 	}
 	return ret;
 }
@@ -60,7 +60,7 @@ static int cdev_mem_close(fd_t *fd)
 	case CDEV_MEM_URANDOM:
 		break;
 	default:
-		ret = -EINVAL;
+		ret = -ENODEV;
 	}
 	return ret;
 }
@@ -126,7 +126,7 @@ static ssize_t cdev_mem_read(fd_t *fd, void *buf, size_t n)
 		ret = kmsg_read(fd, buf, n);
 		break;
 	default:
-		ret = -EINVAL;
+		ret = -ENODEV;
 	}
 	return ret;
 }
@@ -185,7 +185,7 @@ static ssize_t cdev_mem_write(fd_t *fd, const void *buf, size_t n)
 		ret = kmsg_write(fd, buf, n);
 		break;
 	default:
-		ret = -EINVAL;
+		ret = -ENODEV;
 	}
 	return ret;
 }
@@ -229,7 +229,7 @@ static ssize_t cdev_mem_lseek(fd_t *fd, off_t offset, int whence)
 		ret = kmsg_lseek(fd, offset, whence);
 		break;
 	default:
-		ret = -EINVAL;
+		ret = -ENODEV;
 	}
 	return ret;
 }
